@@ -1,0 +1,277 @@
+# =============================================================================
+# Fast Flat Locomotion
+#
+# Plane-only pretraining for the champion-video style low bounding gait:
+# low body, narrow stance, long stride, short flight, and bounded power.
+# Use this before TrackNav if the current gait is still conservative walking.
+# =============================================================================
+
+[env]
+num_envs = 4096
+episode_length_s = 12
+
+[env_conf]
+seed = 0
+
+[terrain]
+mode = "plane"
+
+[domain_rand]
+enable_domain_rand = true
+randomize_friction = true
+friction_range = [0.55, 1.35]
+push_robots = false
+
+[noise]
+add_noise = true
+
+[init_state]
+pos = [0.0, 0.0, 0.34]
+
+[commands]
+resampling_time = [3.0, 5.0]
+
+[commands.limit]
+lin_vel_x = [0.0, 2.4]
+lin_vel_y = [-0.25, 0.25]
+ang_vel_z = [-1.2, 1.2]
+
+[commands.ranges]
+lin_vel_x = [0.8, 1.3]
+lin_vel_y = [-0.10, 0.10]
+ang_vel_yaw = [-0.45, 0.45]
+
+[rewards.track_lin_vel_xy]
+weight = 2.2
+[rewards.track_lin_vel_xy.params]
+std = 0.22
+command_name = "base_velocity"
+max_std = 0.34
+speed_for_min_std = 0.8
+speed_for_max_std = 1.8
+
+[rewards.track_ang_vel_z]
+weight = 0.20
+[rewards.track_ang_vel_z.params]
+std = 0.30
+command_name = "base_velocity"
+
+[rewards.forward_velocity]
+weight = 0.45
+[rewards.forward_velocity.params]
+command_name = "base_velocity"
+deadband = 0.04
+speed_scale = 0.40
+power_scale = 34.0
+
+[rewards.diagonal_air_sync]
+weight = 0.42
+[rewards.diagonal_air_sync.params]
+command_name = "base_velocity"
+min_support_feet = 1
+max_support_feet = 3
+power_scale = 34.0
+
+[rewards.low_hop_air_time]
+weight = 0.34
+[rewards.low_hop_air_time.params]
+command_name = "base_velocity"
+target_air_time = 0.12
+std = 0.055
+max_body_vz = 0.24
+min_support_feet = 1
+max_support_feet = 3
+power_scale = 34.0
+
+[rewards.soft_takeoff]
+weight = 0.22
+[rewards.soft_takeoff.params]
+command_name = "base_velocity"
+target_up_vel = 0.10
+std = 0.06
+min_up_vel = 0.025
+max_up_vel = 0.22
+power_scale = 34.0
+
+[rewards.soft_landing]
+weight = 0.22
+[rewards.soft_landing.params]
+command_name = "base_velocity"
+min_air_time = 0.05
+vertical_speed_std = 0.16
+angular_speed_std = 0.45
+force_soft_limit = 115.0
+force_scale = 75.0
+power_scale = 34.0
+
+[rewards.spring_efficiency]
+weight = 0.42
+[rewards.spring_efficiency.params]
+command_name = "base_velocity"
+target_vertical_speed = 0.09
+vertical_std = 0.07
+max_vertical_speed = 0.23
+target_duty = 0.50
+duty_std = 0.16
+speed_scale = 0.40
+power_scale = 34.0
+
+[rewards.gait_duty_factor]
+weight = 0.26
+[rewards.gait_duty_factor.params]
+command_name = "base_velocity"
+target_duty = 0.50
+std = 0.16
+power_scale = 34.0
+
+[rewards.speed_narrow_gait]
+weight = 0.26
+[rewards.speed_narrow_gait.params]
+command_name = "base_velocity"
+target_abs_y = 0.105
+min_abs_y = 0.065
+std = 0.04
+speed_threshold = 0.9
+speed_full = 1.7
+power_scale = 34.0
+
+[rewards.posture_stability]
+weight = 0.75
+[rewards.posture_stability.params]
+gravity_std = 0.15
+ang_vel_std = 0.40
+
+[rewards.energy_efficiency]
+weight = 0.95
+[rewards.energy_efficiency.params]
+command_name = "base_velocity"
+power_scale = 34.0
+
+[rewards.energy_posture_gate]
+weight = 0.55
+[rewards.energy_posture_gate.params]
+command_name = "base_velocity"
+pose_std = 0.15
+ang_vel_std = 0.40
+power_scale = 34.0
+
+[rewards.pareto_aligned]
+weight = 1.15
+[rewards.pareto_aligned.params]
+command_name = "base_velocity"
+forward_threshold = 0.85
+tracking_std = 0.24
+posture_weight = 0.45
+energy_weight = 0.40
+time_weight = 0.15
+gravity_std = 0.15
+ang_vel_std = 0.40
+power_scale = 34.0
+
+[rewards.lin_vel_z]
+weight = -0.12
+
+[rewards.ang_vel_xy]
+weight = -0.24
+
+[rewards.ang_acc_xy]
+weight = -0.06
+
+[rewards.flat_orientation]
+weight = -0.75
+
+[rewards.correct_base_height]
+weight = -0.16
+[rewards.correct_base_height.params]
+target_height = 0.35
+
+[rewards.speed_adaptive_base_height]
+weight = -0.32
+[rewards.speed_adaptive_base_height.params]
+command_name = "base_velocity"
+low_speed_target = 0.37
+high_speed_target = 0.335
+speed_for_low = 0.8
+speed_for_high = 1.8
+
+[rewards.joint_acc]
+weight = -6.0e-7
+
+[rewards.joint_torques]
+weight = -1.0e-4
+
+[rewards.dof_pos_limits]
+weight = -0.3
+
+[rewards.action_rate]
+weight = -0.014
+
+[rewards.action_smoothness]
+weight = -0.010
+
+[rewards.undesired_contacts]
+weight = -0.35
+[rewards.undesired_contacts.params]
+threshold = 1
+
+[rewards.hip_to_default]
+weight = -0.10
+
+[rewards.x_command_hip_regular]
+weight = -0.45
+[rewards.x_command_hip_regular.params]
+command_name = "base_velocity"
+min_command = 0.08
+
+[rewards.feet_air_time]
+weight = 0.10
+[rewards.feet_air_time.params]
+command_name = "base_velocity"
+threshold = 0.14
+
+[rewards.feet_slide]
+weight = -0.12
+
+[rewards.feet_stumble]
+weight = -0.04
+
+[rewards.termination]
+weight = -3.5
+
+[rewards.dof_vel]
+weight = -3.5e-4
+
+[rewards.base_lateral_vel]
+weight = -0.65
+
+[rewards.air_time_variance_penalty]
+weight = -0.45
+
+[rewards.energy]
+weight = -2.0e-5
+
+[velocity_curriculum]
+promote_threshold = 0.64
+promote_count = 3
+demote_threshold = 0.38
+demote_count = 2
+
+[[velocity_curriculum.stages]]
+lin_vel_x = [0.8, 1.3]
+lin_vel_y = [-0.10, 0.10]
+ang_vel_yaw = [-0.45, 0.45]
+
+[[velocity_curriculum.stages]]
+lin_vel_x = [1.0, 1.6]
+lin_vel_y = [-0.12, 0.12]
+ang_vel_yaw = [-0.55, 0.55]
+
+[[velocity_curriculum.stages]]
+lin_vel_x = [1.2, 1.9]
+lin_vel_y = [-0.15, 0.15]
+ang_vel_yaw = [-0.65, 0.65]
+
+[[velocity_curriculum.stages]]
+lin_vel_x = [1.4, 2.2]
+lin_vel_y = [-0.18, 0.18]
+ang_vel_yaw = [-0.75, 0.75]

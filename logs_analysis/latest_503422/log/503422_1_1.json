@@ -1,0 +1,16 @@
+{
+    "name": "503422_1_1",
+    "project_code": "robot",
+    "status": 1,
+    "camps": [
+        {
+            "camp_type": "blue",
+            "camp_code": "A",
+            "start_info": "{}",
+            "end_info": "{\"total_score\": 0.0, \"pose_score\": 40.88, \"energy_score\": 73.71, \"episode_count\": 16, \"time_score\": 47.48, \"completion_coeff\": 0.0, \"score_detail\": [{\"terrain_type\": \"track_level_0\", \"total_score\": 0.0, \"completion_coeff\": 0.0, \"pose_score\": 32.27, \"energy_score\": 74.08, \"episode_count\": 4, \"time_score\": 22.0}, {\"terrain_type\": \"track_level_1\", \"total_score\": 0.0, \"completion_coeff\": 0.0, \"pose_score\": 39.18, \"energy_score\": 73.63, \"episode_count\": 4, \"time_score\": 55.61}, {\"terrain_type\": \"track_level_2\", \"total_score\": 0.0, \"completion_coeff\": 0.0, \"pose_score\": 42.58, \"energy_score\": 75.12, \"episode_count\": 4, \"time_score\": 60.01}, {\"terrain_type\": \"track_level_3\", \"total_score\": 0.0, \"completion_coeff\": 0.0, \"pose_score\": 49.49, \"energy_score\": 72.02, \"episode_count\": 4, \"time_score\": 52.29}], \"export_score_detail\": [{\"terrain_type\": \"track_level_0\", \"total_score\": 0.0, \"completion_coeff\": 0.0, \"pose_score\": 32.27, \"energy_score\": 74.08, \"episode_count\": 4, \"time_score\": 22.0}, {\"terrain_type\": \"track_level_1\", \"total_score\": 0.0, \"completion_coeff\": 0.0, \"pose_score\": 39.18, \"energy_score\": 73.63, \"episode_count\": 4, \"time_score\": 55.61}, {\"terrain_type\": \"track_level_2\", \"total_score\": 0.0, \"completion_coeff\": 0.0, \"pose_score\": 42.58, \"energy_score\": 75.12, \"episode_count\": 4, \"time_score\": 60.01}, {\"terrain_type\": \"track_level_3\", \"total_score\": 0.0, \"completion_coeff\": 0.0, \"pose_score\": 49.49, \"energy_score\": 72.02, \"episode_count\": 4, \"time_score\": 52.29}]}"
+        }
+    ],
+    "frames": "{}",
+    "start_time": "2026-05-15T00:47:20.280905+00:00",
+    "end_time": "2026-05-15T00:54:31.652853+00:00"
+}

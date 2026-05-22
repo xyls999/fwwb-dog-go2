@@ -1,0 +1,134 @@
+# =============================================================================
+# Standard Locomotion: locomotion training on a standard grid of mixed sub-terrains.
+# Standard Locomotion: 标准地形运动训练（多种子地形按比例混合）
+# =============================================================================
+
+# === Basic Configuration ===
+# === 基础配置 ===
+[env]
+num_envs = 2048
+episode_length_s = 25
+
+[env_conf]
+seed = 0
+
+
+# === Terrain Configuration ===
+# === 地形配置 ===
+[terrain]
+mode = "standard"
+num_rows = 10
+num_cols = 20
+difficulty_range = [0.0, 1.0]
+curriculum = true
+max_init_terrain_level = 5
+
+[terrain.standard.pyramid_slope]
+proportion = 0.15
+
+[terrain.standard.pyramid_slope_inv]
+proportion = 0.2
+
+[terrain.standard.pyramid_stairs]
+proportion = 0.25
+
+[terrain.standard.pyramid_stairs_inv]
+proportion = 0.3
+
+[terrain.standard.maze]
+proportion = 0.1
+
+
+# === Domain Randomization ===
+# === 域随机化 ===
+[domain_rand]
+enable_domain_rand = true
+randomize_friction = true
+friction_range = [0.3, 1.5]
+push_robots = true
+push_interval_s = 15
+max_push_vel_xy = 0.5
+
+
+# === Observation Noise ===
+# === 观测噪声 ===
+[noise]
+add_noise = true
+
+
+# === Initial State ===
+# === 初始状态 ===
+[init_state]
+pos = [0.0, 0.0, 0.35]
+
+
+# === Velocity Commands ===
+# === 速度命令 ===
+[commands]
+resampling_time = [10.0, 10.0]
+
+[commands.limit]
+lin_vel_x = [-2.0, 2.0]
+lin_vel_y = [-1.5, 1.5]
+ang_vel_z = [-1.5, 1.5]
+
+[commands.ranges]
+lin_vel_x = [0.2, 0.8]
+lin_vel_y = [-0.3, 0.3]
+ang_vel_yaw = [-1.0, 1.0]
+
+
+# =====================================================================
+# Reward Configuration — identical to agent_diy official standard TOML
+# 奖励配置 — 与 agent_diy 官方标准 TOML 完全一致
+# =====================================================================
+
+# --- Positive: velocity tracking ---
+[rewards.track_lin_vel_xy]
+weight = 1.0
+[rewards.track_lin_vel_xy.params]
+std = 0.25
+command_name = "base_velocity"
+
+[rewards.track_ang_vel_z]
+weight = 0.5
+[rewards.track_ang_vel_z.params]
+std = 0.25
+command_name = "base_velocity"
+
+# --- Negative: base stability ---
+[rewards.lin_vel_z]
+weight = -2.0
+
+[rewards.ang_vel_xy]
+weight = -0.08
+
+# --- Negative: joint smoothness ---
+[rewards.joint_acc]
+weight = -2.5e-7
+
+[rewards.joint_torques]
+weight = -1.5e-4
+
+[rewards.dof_pos_limits]
+weight = -2.0
+
+# --- Negative: action smoothness ---
+[rewards.action_rate]
+weight = -0.01
+
+# --- Negative: undesired contacts ---
+[rewards.undesired_contacts]
+weight = -1.0
+[rewards.undesired_contacts.params]
+threshold = 1
+
+# --- Anti-tipping ---
+[rewards.flat_orientation]
+weight = -1.5
+
+# --- Reach goal (only active in track terrain, returns 0 in standard) ---
+[rewards.reach_goal]
+weight = 10.0
+[rewards.reach_goal.params]
+threshold = 0.6

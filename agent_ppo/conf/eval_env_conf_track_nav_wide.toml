@@ -1,0 +1,40 @@
+# Wide-command track navigation evaluation template.
+# The PPO policy ignores platform-random velocity commands during eval via
+# [rl_navigation].eval_command_override in train_env_conf_track_nav.toml.
+
+[env]
+num_envs = 16
+episode_length_s = 120.0
+
+[env_conf]
+task_name = "Unitree-Go2-Velocity"
+device = "cuda:0"
+use_fabric = true
+save_mp4 = true
+
+[terrain]
+mode = "track"
+level = [0, 1, 3, 4]
+curriculum = false
+
+[terrain.track]
+track_length = 5
+sub_terrains = ["pyramid_slope", "pyramid_slope_inv", "pyramid_stairs", "pyramid_stairs_inv", "open_entry_maze"]
+num_parallel_tracks = 10
+
+[commands]
+resampling_time = [2.0, 4.0]
+
+[commands.limit]
+lin_vel_x = [0.0, 1.7]
+lin_vel_y = [-1.0, 1.0]
+ang_vel_z = [-1.8, 1.8]
+
+[commands.ranges]
+lin_vel_x = [0.0, 1.7]
+lin_vel_y = [-1.0, 1.0]
+ang_vel_yaw = [-1.8, 1.8]
+
+[rl_navigation]
+eval_command_override = true
+eval_command = [0.55, 0.0, 0.0]

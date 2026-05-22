@@ -1,0 +1,74 @@
+2026-05-15 04:53:20.521 | INFO | PID:317 | learner.main:428 - learner Running mode: normal, Monitor version: v2
+2026-05-15 04:53:20.521 | INFO | PID:317 | learner.register_monitor:164 - learner learner_init Start loading framework default monitor file kaiwudrl/conf/kaiwudrl/monitor.yaml
+2026-05-15 04:53:20.521 | INFO | PID:317 | monitor_config_builder.load_monitor_config_from_yaml:667 - learner learner_init Loading monitor file
+2026-05-15 04:53:20.526 | INFO | PID:317 | monitor_config_builder.load_monitor_config_from_yaml:673 - learner learner_init YAML file read successfully, starting validation and configuration build...
+2026-05-15 04:53:20.526 | INFO | PID:317 | monitor_config_builder.load_monitor_config_from_yaml:680 - learner learner_init Config build validation successful!
+2026-05-15 04:53:20.527 | INFO | PID:317 | monitor_config_builder.merge:487 - learner Config merge completed
+2026-05-15 04:53:20.527 | INFO | PID:317 | learner.register_monitor:170 - learner learner_init Framework default monitor config merged successfully (lowest priority)
+2026-05-15 04:53:20.527 | INFO | PID:317 | learner.register_monitor:177 - learner learner_init Start loading project default monitor file
+2026-05-15 04:53:20.527 | INFO | PID:317 | monitor_config_builder.load_monitor_config_from_yaml:667 - learner learner_init Loading monitor file
+2026-05-15 04:53:20.594 | INFO | PID:317 | monitor_config_builder.load_monitor_config_from_yaml:673 - learner learner_init YAML file read successfully, starting validation and configuration build...
+2026-05-15 04:53:20.594 | INFO | PID:317 | monitor_config_builder.load_monitor_config_from_yaml:680 - learner learner_init Config build validation successful!
+2026-05-15 04:53:20.595 | INFO | PID:317 | monitor_config_builder.merge:487 - learner Config merge completed
+2026-05-15 04:53:20.595 | INFO | PID:317 | learner.register_monitor:183 - learner learner_init Project default monitor config merged successfully (medium priority, overrides framework default)
+2026-05-15 04:53:20.595 | INFO | PID:317 | learner.register_monitor:195 - learner learner_init Start loading user custom monitor file: agent_ppo/conf/monitor_builder.py
+2026-05-15 04:53:20.596 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:866 - learner learner_init User config directory added to Python path: /data/projects/legged_robot_competition_26/agent_ppo/conf
+2026-05-15 04:53:20.597 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [mean_episode_length]: avg(kaiwu_mean_episode_length{})
+2026-05-15 04:53:20.597 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [mean_episode_reward]: avg(kaiwu_mean_episode_reward{})
+2026-05-15 04:53:20.597 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [total_loss]: avg(kaiwu_total_loss{})
+2026-05-15 04:53:20.597 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [value_loss]: avg(kaiwu_value_loss{})
+2026-05-15 04:53:20.598 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [policy_loss]: avg(kaiwu_policy_loss{})
+2026-05-15 04:53:20.598 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [entropy_loss]: avg(kaiwu_entropy_loss{})
+2026-05-15 04:53:20.598 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_track_lin_vel_xy]: avg(kaiwu_reward_track_lin_vel_xy{})
+2026-05-15 04:53:20.598 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_track_ang_vel_z]: avg(kaiwu_reward_track_ang_vel_z{})
+2026-05-15 04:53:20.598 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [vel_curriculum_tracking_ratio]: avg(kaiwu_vel_curriculum_tracking_ratio{})
+2026-05-15 04:53:20.598 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [vel_curriculum_stage]: avg(kaiwu_vel_curriculum_stage{})
+2026-05-15 04:53:20.598 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_flat_orientation]: avg(kaiwu_reward_flat_orientation{})
+2026-05-15 04:53:20.598 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_correct_base_height]: avg(kaiwu_reward_correct_base_height{})
+2026-05-15 04:53:20.598 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_joint_position_penalty]: avg(kaiwu_reward_joint_position_penalty{})
+2026-05-15 04:53:20.598 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_base_lateral_vel]: avg(kaiwu_reward_base_lateral_vel{})
+2026-05-15 04:53:20.598 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_ang_vel_xy]: avg(kaiwu_reward_ang_vel_xy{})
+2026-05-15 04:53:20.598 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_feet_air_time]: avg(kaiwu_reward_feet_air_time{})
+2026-05-15 04:53:20.598 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_dof_vel]: avg(kaiwu_reward_dof_vel{})
+2026-05-15 04:53:20.599 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_air_time_variance_penalty]: avg(kaiwu_reward_air_time_variance_penalty{})
+2026-05-15 04:53:20.599 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_pivot_turning]: avg(kaiwu_reward_pivot_turning{})
+2026-05-15 04:53:20.599 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_feet_slide]: avg(kaiwu_reward_feet_slide{})
+2026-05-15 04:53:20.599 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_feet_stumble]: avg(kaiwu_reward_feet_stumble{})
+2026-05-15 04:53:20.599 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_lin_vel_z]: avg(kaiwu_reward_lin_vel_z{})
+2026-05-15 04:53:20.599 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_undesired_contacts]: avg(kaiwu_reward_undesired_contacts{})
+2026-05-15 04:53:20.599 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_termination]: avg(kaiwu_reward_termination{})
+2026-05-15 04:53:20.599 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_dof_pos_limits]: avg(kaiwu_reward_dof_pos_limits{})
+2026-05-15 04:53:20.599 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_joint_acc]: avg(kaiwu_reward_joint_acc{})
+2026-05-15 04:53:20.599 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_action_rate]: avg(kaiwu_reward_action_rate{})
+2026-05-15 04:53:20.599 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_action_smoothness]: avg(kaiwu_reward_action_smoothness{})
+2026-05-15 04:53:20.599 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_approach_goal]: avg(kaiwu_reward_approach_goal{})
+2026-05-15 04:53:20.599 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_obstacle_evasion]: avg(kaiwu_reward_obstacle_evasion{})
+2026-05-15 04:53:20.599 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_energy]: avg(kaiwu_reward_energy{})
+2026-05-15 04:53:20.599 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [reward_joint_torques]: avg(kaiwu_reward_joint_torques{})
+2026-05-15 04:53:20.600 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [obs_lin_vel_x_error]: avg(kaiwu_obs_lin_vel_x_error{})
+2026-05-15 04:53:20.600 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [obs_lin_vel_y_error]: avg(kaiwu_obs_lin_vel_y_error{})
+2026-05-15 04:53:20.600 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [obs_actual_vel_x]: avg(kaiwu_obs_actual_vel_x{})
+2026-05-15 04:53:20.600 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [obs_base_height]: avg(kaiwu_obs_base_height{})
+2026-05-15 04:53:20.600 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [obs_ang_vel_xy]: avg(kaiwu_obs_ang_vel_xy{})
+2026-05-15 04:53:20.600 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [nav_cmd_vx]: avg(kaiwu_nav_cmd_vx{})
+2026-05-15 04:53:20.600 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [nav_cmd_vy]: avg(kaiwu_nav_cmd_vy{})
+2026-05-15 04:53:20.600 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:901 - learner learner_init Modified expr for metric [nav_cmd_yaw_rate]: avg(kaiwu_nav_cmd_yaw_rate{})
+2026-05-15 04:53:20.600 | INFO | PID:317 | monitor_config_builder.load_user_monitor_config:907 - learner learner_init User custom monitor config loaded successfully (kaiwu_ prefix added): /data/projects/legged_robot_competition_26/agent_ppo/conf/monitor_builder.py
+2026-05-15 04:53:20.600 | INFO | PID:317 | monitor_config_builder.merge:487 - learner Config merge completed
+2026-05-15 04:53:20.600 | INFO | PID:317 | learner.register_monitor:201 - learner learner_init User custom monitor config merged successfully (highest priority, overrides all default configs)
+2026-05-15 04:53:20.600 | INFO | PID:317 | learner.register_monitor:212 - learner learner_init Start building final monitor config...
+2026-05-15 04:53:20.601 | INFO | PID:317 | learner.register_monitor:220 - learner learner_init Output directory /workspace/train/ ready (created automatically if not exists)
+2026-05-15 04:53:20.829131: I tensorflow/core/util/port.cc:110] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2026-05-15 04:53:20.830866: I tensorflow/tsl/cuda/cudart_stub.cc:28] Could not find cuda drivers on your machine, GPU will not be used.
+2026-05-15 04:53:20.868087: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI AVX512_BF16 AVX_VNNI AMX_TILE AMX_INT8 AMX_BF16 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2026-05-15 04:53:23.015621: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[reverb/cc/platform/tfrecord_checkpointer.cc:162]  Initializing TFRecordCheckpointer in /tmp/tmpmk62_alx.
+[reverb/cc/platform/tfrecord_checkpointer.cc:567] Loading latest checkpoint from /tmp/tmpmk62_alx
+[reverb/cc/platform/default/server.cc:71] Started replay server on port 9999
+2026-05-15 04:53:28.686 | WARNING | PID:338 | trainer.before_run:365 - learner train only run_mode is train support preload model
+2026-05-15 04:59:00.623 | INFO | PID:338 | trainer.learner_process_message_by_aisrv:596 - learner train learner recv process_stop from aisrv 10.20.84.201_0, error_code 0
+2026-05-15 04:59:00.623 | INFO | PID:338 | trainer.learner_process_message_by_aisrv:604 - learner train learner send process_stop result to aisrv 10.20.84.201_0
+2026-05-15 04:59:00.624 | INFO | PID:338 | trainer.learner_get_aisrv_address:478 - learner train get default aisrv_address success, aisrv address: ['127.0.0.1:8000']
+2026-05-15 04:59:00.624 | INFO | PID:338 | trainer.learner_process_message_by_aisrv:639 - learner train learner recv aisrv 1 / 1 >= 1, so exit
+2026-05-15 04:59:00.624 | INFO | PID:338 | model_file_common.process_stop_write_file:411 - learner process_stop_write_file, error_code is 0

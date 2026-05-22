@@ -1,0 +1,984 @@
++ battle_dir=/workspace/battle
++ task_id=503371
++ owner_type=battle
++ owner_id=0
++ round_index=1
++ game_index=1
++ game_name=503371_1_1
+++ date -u +%Y-%m-%dT%H:%M:%S.%6NZ
++ start_time=2026-05-14T22:57:06.203801Z
++ game_data_dir=/workspace/battle/503371_1_1
++ '[' '!' -d /workspace/battle/503371_1_1 ']'
++ mkdir -p /workspace/battle/503371_1_1
++ trap handle_error ERR
++++ dirname /root/tools/start_eval.sh
+++ cd /root/tools
+++ pwd
++ shell_dir=/root/tools
++ . /root/tools/common.sh
+++++ dirname /root/tools/common.sh
++++ cd /root/tools
++++ pwd
+++ tools_dir=/root/tools
+++ . /root/tools/constant.sh
++++ app=legged_robot_competition_26
++++ algo=ppo
++++ parallel_env_per_aisrv=1
++++ env_num=
++++ aisrv_num=
++++ task_id=503371
++++ max_step=2000
++++ owner_type=battle
++++ aisrv_env_ipc_method=zmq
++++ ROLE_BATTLE_SERVER=1
++++ ROLE_LEARNER=4
++++ ROLE_MASTER_LEARNER=5
++++ ide_language=zh-cn
++++ scale_type=small
++++ training_mode=
++++ task_uuid=
++++ set_index=
++++ set_cnt=
++++ task_id=503371
++++ round_index=1
++++ owner_id=0
++++ have_abs=no
++++ quick_review_data_type=frame
++++ declare -A project_algorithm_list
++++ project_algorithm_list["back_to_the_realm_v2"]='agent_target_dqn agent_dqn agent_diy agent_ppo'
++++ project_algorithm_list["back_to_the_realm"]='agent_target_dqn agent_dqn agent_diy'
++++ project_algorithm_list["gorge_walk"]='agent_dynamic_programming agent_diy agent_sarsa agent_q_learning agent_monte_carlo'
++++ project_algorithm_list["gorge_walk_v2"]='agent_dynamic_programming agent_diy agent_sarsa agent_q_learning agent_monte_carlo'
++++ project_algorithm_list["intelligent_traffic_lights"]='agent_dynamic_webster agent_target_dqn agent_dqn agent_diy agent_ppo'
++++ project_algorithm_list["intelligent_traffic_lights_v2"]='agent_dynamic_webster agent_target_dqn agent_dqn agent_diy'
++++ project_algorithm_list["infinity_valley"]='agent_policy_gradient agent_a2c agent_diy agent_ppo'
++++ project_algorithm_list["hok1v1"]='agent_diy agent_ppo'
++++ project_algorithm_list["hok3v3_collaboration"]='agent_diy agent_ppo'
++++ project_algorithm_list["hok5v5_dld"]='agent_diy agent_ppo'
++++ project_algorithm_list["legged_robot_locomotion_control"]='agent_diy agent_ppo'
++++ project_algorithm_list["legged_robot_exp"]='agent_diy agent_ppo'
++++ project_algorithm_list["legged_robot_sim2real_exp"]='agent_diy agent_ppo'
++++ project_algorithm_list["legged_robot_competition_26"]='agent_diy agent_ppo'
++++ project_algorithm_list["drone_delivery"]='agent_diy agent_ppo'
++++ project_algorithm_list["robot_vacuum"]='agent_diy agent_ppo'
++++ project_algorithm_list["gorge_chase"]='agent_diy agent_ppo'
++++ project_algorithm_list["drone"]='agent_diy agent_ppo agent_a2c agent_target_dqn agent_dqn isaac_env'
++++ project_algorithm_list["drone_obstacle_nav"]='agent_diy agent_ppo'
++++ project_algorithm_list["truss"]='agent_mcts agent_dqn agent_diy agent_ppo truss_env'
++++ [[ -n '' ]]
++++ user_save_mode_max_counts["back_to_the_realm_v2"]=200
++++ user_save_mode_max_counts["back_to_the_realm"]=200
++++ user_save_mode_max_counts["gorge_walk"]=200
++++ user_save_mode_max_counts["gorge_walk_v2"]=200
++++ user_save_mode_max_counts["intelligent_traffic_lights"]=200
++++ user_save_mode_max_counts["intelligent_traffic_lights_v2"]=200
++++ user_save_mode_max_counts["infinity_valley"]=200
++++ user_save_mode_max_counts["hok1v1"]=200
++++ user_save_mode_max_counts["hok3v3_collaboration"]=200
++++ user_save_mode_max_counts["hok5v5_dld"]=200
++++ user_save_mode_max_counts["legged_robot_locomotion_control"]=200
++++ user_save_mode_max_counts["legged_robot_exp"]=200
++++ user_save_mode_max_counts["legged_robot_sim2real_exp"]=200
++++ user_save_mode_max_counts["legged_robot_competition_26"]=200
++++ user_save_mode_max_counts["drone_delivery"]=200
++++ user_save_mode_max_counts["robot_vacuum"]=200
++++ user_save_mode_max_counts["gorge_chase"]=200
++++ user_save_mode_max_counts["drone"]=200
++++ user_save_mode_max_counts["drone_obstacle_nav"]=200
++++ user_save_mode_max_counts["truss"]=200
++++ user_save_model_max_frequency_per_mins["back_to_the_realm_v2"]=2
++++ user_save_model_max_frequency_per_mins["back_to_the_realm"]=2
++++ user_save_model_max_frequency_per_mins["gorge_walk"]=2
++++ user_save_model_max_frequency_per_mins["gorge_walk_v2"]=2
++++ user_save_model_max_frequency_per_mins["intelligent_traffic_lights"]=2
++++ user_save_model_max_frequency_per_mins["intelligent_traffic_lights_v2"]=2
++++ user_save_model_max_frequency_per_mins["infinity_valley"]=2
++++ user_save_model_max_frequency_per_mins["hok1v1"]=2
++++ user_save_model_max_frequency_per_mins["hok3v3_collaboration"]=2
++++ user_save_model_max_frequency_per_mins["hok5v5_dld"]=2
++++ user_save_model_max_frequency_per_mins["legged_robot_locomotion_control"]=2
++++ user_save_model_max_frequency_per_mins["legged_robot_exp"]=2
++++ user_save_model_max_frequency_per_mins["legged_robot_sim2real_exp"]=2
++++ user_save_model_max_frequency_per_mins["legged_robot_competition_26"]=2
++++ user_save_model_max_frequency_per_mins["drone_delivery"]=2
++++ user_save_model_max_frequency_per_mins["robot_vacuum"]=2
++++ user_save_model_max_frequency_per_mins["gorge_chase"]=2
++++ user_save_model_max_frequency_per_mins["drone"]=2
++++ user_save_model_max_frequency_per_mins["drone_obstacle_nav"]=2
++++ user_save_model_max_frequency_per_mins["truss"]=2
+++ project_dir=/data/projects/legged_robot_competition_26
+++ mkdir -p /data/projects/legged_robot_competition_26
+++ host_ip=get_host_ip
++ set_name=legged_robot_competition_26_503371
++ log_dir=/data/projects/legged_robot_competition_26/log
++ [[ aisrv != \g\a\m\e\c\o\r\e ]]
++ sh /root/tools/init_code.sh
++++ dirname /root/tools/init_code.sh
+++ cd /root/tools
+++ pwd
++ shell_dir=/root/tools
++ . /root/tools/common.sh
+++++ dirname /root/tools/common.sh
++++ cd /root/tools
++++ pwd
+++ tools_dir=/root/tools
+++ . /root/tools/constant.sh
++++ app=legged_robot_competition_26
++++ algo=ppo
++++ parallel_env_per_aisrv=1
++++ env_num=
++++ aisrv_num=
++++ task_id=503371
++++ max_step=2000
++++ owner_type=battle
++++ aisrv_env_ipc_method=zmq
++++ ROLE_BATTLE_SERVER=1
++++ ROLE_LEARNER=4
++++ ROLE_MASTER_LEARNER=5
++++ ide_language=zh-cn
++++ scale_type=small
++++ training_mode=
++++ task_uuid=
++++ set_index=
++++ set_cnt=
++++ task_id=503371
++++ round_index=1
++++ owner_id=0
++++ have_abs=no
++++ quick_review_data_type=frame
++++ declare -A project_algorithm_list
++++ project_algorithm_list["back_to_the_realm_v2"]='agent_target_dqn agent_dqn agent_diy agent_ppo'
++++ project_algorithm_list["back_to_the_realm"]='agent_target_dqn agent_dqn agent_diy'
++++ project_algorithm_list["gorge_walk"]='agent_dynamic_programming agent_diy agent_sarsa agent_q_learning agent_monte_carlo'
++++ project_algorithm_list["gorge_walk_v2"]='agent_dynamic_programming agent_diy agent_sarsa agent_q_learning agent_monte_carlo'
++++ project_algorithm_list["intelligent_traffic_lights"]='agent_dynamic_webster agent_target_dqn agent_dqn agent_diy agent_ppo'
++++ project_algorithm_list["intelligent_traffic_lights_v2"]='agent_dynamic_webster agent_target_dqn agent_dqn agent_diy'
++++ project_algorithm_list["infinity_valley"]='agent_policy_gradient agent_a2c agent_diy agent_ppo'
++++ project_algorithm_list["hok1v1"]='agent_diy agent_ppo'
++++ project_algorithm_list["hok3v3_collaboration"]='agent_diy agent_ppo'
++++ project_algorithm_list["hok5v5_dld"]='agent_diy agent_ppo'
++++ project_algorithm_list["legged_robot_locomotion_control"]='agent_diy agent_ppo'
++++ project_algorithm_list["legged_robot_exp"]='agent_diy agent_ppo'
++++ project_algorithm_list["legged_robot_sim2real_exp"]='agent_diy agent_ppo'
++++ project_algorithm_list["legged_robot_competition_26"]='agent_diy agent_ppo'
++++ project_algorithm_list["drone_delivery"]='agent_diy agent_ppo'
++++ project_algorithm_list["robot_vacuum"]='agent_diy agent_ppo'
++++ project_algorithm_list["gorge_chase"]='agent_diy agent_ppo'
++++ project_algorithm_list["drone"]='agent_diy agent_ppo agent_a2c agent_target_dqn agent_dqn isaac_env'
++++ project_algorithm_list["drone_obstacle_nav"]='agent_diy agent_ppo'
++++ project_algorithm_list["truss"]='agent_mcts agent_dqn agent_diy agent_ppo truss_env'
++++ [[ -n '' ]]
++++ user_save_mode_max_counts["back_to_the_realm_v2"]=200
++++ user_save_mode_max_counts["back_to_the_realm"]=200
++++ user_save_mode_max_counts["gorge_walk"]=200
++++ user_save_mode_max_counts["gorge_walk_v2"]=200
++++ user_save_mode_max_counts["intelligent_traffic_lights"]=200
++++ user_save_mode_max_counts["intelligent_traffic_lights_v2"]=200
++++ user_save_mode_max_counts["infinity_valley"]=200
++++ user_save_mode_max_counts["hok1v1"]=200
++++ user_save_mode_max_counts["hok3v3_collaboration"]=200
++++ user_save_mode_max_counts["hok5v5_dld"]=200
++++ user_save_mode_max_counts["legged_robot_locomotion_control"]=200
++++ user_save_mode_max_counts["legged_robot_exp"]=200
++++ user_save_mode_max_counts["legged_robot_sim2real_exp"]=200
++++ user_save_mode_max_counts["legged_robot_competition_26"]=200
++++ user_save_mode_max_counts["drone_delivery"]=200
++++ user_save_mode_max_counts["robot_vacuum"]=200
++++ user_save_mode_max_counts["gorge_chase"]=200
++++ user_save_mode_max_counts["drone"]=200
++++ user_save_mode_max_counts["drone_obstacle_nav"]=200
++++ user_save_mode_max_counts["truss"]=200
++++ user_save_model_max_frequency_per_mins["back_to_the_realm_v2"]=2
++++ user_save_model_max_frequency_per_mins["back_to_the_realm"]=2
++++ user_save_model_max_frequency_per_mins["gorge_walk"]=2
++++ user_save_model_max_frequency_per_mins["gorge_walk_v2"]=2
++++ user_save_model_max_frequency_per_mins["intelligent_traffic_lights"]=2
++++ user_save_model_max_frequency_per_mins["intelligent_traffic_lights_v2"]=2
++++ user_save_model_max_frequency_per_mins["infinity_valley"]=2
++++ user_save_model_max_frequency_per_mins["hok1v1"]=2
++++ user_save_model_max_frequency_per_mins["hok3v3_collaboration"]=2
++++ user_save_model_max_frequency_per_mins["hok5v5_dld"]=2
++++ user_save_model_max_frequency_per_mins["legged_robot_locomotion_control"]=2
++++ user_save_model_max_frequency_per_mins["legged_robot_exp"]=2
++++ user_save_model_max_frequency_per_mins["legged_robot_sim2real_exp"]=2
++++ user_save_model_max_frequency_per_mins["legged_robot_competition_26"]=2
++++ user_save_model_max_frequency_per_mins["drone_delivery"]=2
++++ user_save_model_max_frequency_per_mins["robot_vacuum"]=2
++++ user_save_model_max_frequency_per_mins["gorge_chase"]=2
++++ user_save_model_max_frequency_per_mins["drone"]=2
++++ user_save_model_max_frequency_per_mins["drone_obstacle_nav"]=2
++++ user_save_model_max_frequency_per_mins["truss"]=2
+++ project_dir=/data/projects/legged_robot_competition_26
+++ mkdir -p /data/projects/legged_robot_competition_26
+++ host_ip=get_host_ip
++ work_mode=dev
++ code_file=/workspace/code
++ restore_dirs=('conf/kaiwudrl' 'kaiwudrl/conf/kaiwudrl')
++ IFS=' '
++ read -r -a algorithm_array
++ user_code_dirs=("${algorithm_array[@]}" 'conf' '.vscode' "ckpt")
++ user_files=('train_test.py')
++ backup_dir=/tmp/backup
++ mkdir -p /tmp/backup
++ for dir in "${restore_dirs[@]}"
+++ dirname /tmp/backup/conf/kaiwudrl
++ dest_dir=/tmp/backup/conf
++ mkdir -p /tmp/backup/conf
++ '[' -d /data/projects/legged_robot_competition_26/conf/kaiwudrl ']'
++ log_info 'skip backup conf/kaiwudrl (not exist)'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:57:06'
++ echo -e '\033[32m[INFO] [2026-05-15 06:57:06]\033[0m skip backup conf/kaiwudrl (not exist)'
+[32m[INFO] [2026-05-15 06:57:06][0m skip backup conf/kaiwudrl (not exist)
++ for dir in "${restore_dirs[@]}"
+++ dirname /tmp/backup/kaiwudrl/conf/kaiwudrl
++ dest_dir=/tmp/backup/kaiwudrl/conf
++ mkdir -p /tmp/backup/kaiwudrl/conf
++ '[' -d /data/projects/legged_robot_competition_26/kaiwudrl/conf/kaiwudrl ']'
++ cp -rf /data/projects/legged_robot_competition_26/kaiwudrl/conf/kaiwudrl /tmp/backup/kaiwudrl/conf
++ log_info 'backup kaiwudrl/conf/kaiwudrl success'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:57:06'
++ echo -e '\033[32m[INFO] [2026-05-15 06:57:06]\033[0m backup kaiwudrl/conf/kaiwudrl success'
+[32m[INFO] [2026-05-15 06:57:06][0m backup kaiwudrl/conf/kaiwudrl success
++ removed_dirs=()
++ '[' -f /root/tools/.removed_dirs ']'
++ for dir in "${user_code_dirs[@]}"
++ src=/workspace/code/agent_diy
++ dest=/data/projects/legged_robot_competition_26/agent_diy
++ is_removed=false
++ false
++ '[' '!' -d /workspace/code/agent_diy ']'
++ '[' -d /data/projects/legged_robot_competition_26/agent_diy ']'
++ rm -rf /data/projects/legged_robot_competition_26/agent_diy
++ [[ dev != dev* ]]
++ ln -s /workspace/code/agent_diy /data/projects/legged_robot_competition_26/agent_diy
++ log_info 'use agent_diy success'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:57:06'
++ echo -e '\033[32m[INFO] [2026-05-15 06:57:06]\033[0m use agent_diy success'
+[32m[INFO] [2026-05-15 06:57:06][0m use agent_diy success
++ for dir in "${user_code_dirs[@]}"
++ src=/workspace/code/agent_ppo
++ dest=/data/projects/legged_robot_competition_26/agent_ppo
++ is_removed=false
++ false
++ '[' '!' -d /workspace/code/agent_ppo ']'
++ '[' -d /data/projects/legged_robot_competition_26/agent_ppo ']'
++ rm -rf /data/projects/legged_robot_competition_26/agent_ppo
++ [[ dev != dev* ]]
++ ln -s /workspace/code/agent_ppo /data/projects/legged_robot_competition_26/agent_ppo
++ log_info 'use agent_ppo success'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:57:06'
++ echo -e '\033[32m[INFO] [2026-05-15 06:57:06]\033[0m use agent_ppo success'
+[32m[INFO] [2026-05-15 06:57:06][0m use agent_ppo success
++ for dir in "${user_code_dirs[@]}"
++ src=/workspace/code/conf
++ dest=/data/projects/legged_robot_competition_26/conf
++ is_removed=false
++ false
++ '[' '!' -d /workspace/code/conf ']'
++ '[' -d /data/projects/legged_robot_competition_26/conf ']'
++ rm -rf /data/projects/legged_robot_competition_26/conf
++ [[ dev != dev* ]]
++ ln -s /workspace/code/conf /data/projects/legged_robot_competition_26/conf
++ log_info 'use conf success'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:57:06'
++ echo -e '\033[32m[INFO] [2026-05-15 06:57:06]\033[0m use conf success'
+[32m[INFO] [2026-05-15 06:57:06][0m use conf success
++ for dir in "${user_code_dirs[@]}"
++ src=/workspace/code/.vscode
++ dest=/data/projects/legged_robot_competition_26/.vscode
++ is_removed=false
++ false
++ '[' '!' -d /workspace/code/.vscode ']'
++ '[' -d /data/projects/legged_robot_competition_26/.vscode ']'
++ rm -rf /data/projects/legged_robot_competition_26/.vscode
++ log_info '/workspace/code/.vscode not exist, skip and remove /data/projects/legged_robot_competition_26/.vscode'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:57:06'
++ echo -e '\033[32m[INFO] [2026-05-15 06:57:06]\033[0m /workspace/code/.vscode not exist, skip and remove /data/projects/legged_robot_competition_26/.vscode'
+[32m[INFO] [2026-05-15 06:57:06][0m /workspace/code/.vscode not exist, skip and remove /data/projects/legged_robot_competition_26/.vscode
++ continue
++ for dir in "${user_code_dirs[@]}"
++ src=/workspace/code/ckpt
++ dest=/data/projects/legged_robot_competition_26/ckpt
++ is_removed=false
++ false
++ '[' '!' -d /workspace/code/ckpt ']'
++ '[' -d /data/projects/legged_robot_competition_26/ckpt ']'
++ [[ dev != dev* ]]
++ ln -s /workspace/code/ckpt /data/projects/legged_robot_competition_26/ckpt
++ log_info 'use ckpt success'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:57:06'
++ echo -e '\033[32m[INFO] [2026-05-15 06:57:06]\033[0m use ckpt success'
+[32m[INFO] [2026-05-15 06:57:06][0m use ckpt success
++ src=/workspace/code/kaiwu.json
++ dest=/data/projects/legged_robot_competition_26/kaiwu.json
++ [[ dev != dev* ]]
++ ln -sf /workspace/code/kaiwu.json /data/projects/legged_robot_competition_26/kaiwu.json
++ log_info 'use /workspace/code/kaiwu.json success'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:57:06'
++ echo -e '\033[32m[INFO] [2026-05-15 06:57:06]\033[0m use /workspace/code/kaiwu.json success'
+[32m[INFO] [2026-05-15 06:57:06][0m use /workspace/code/kaiwu.json success
++ for dir in "${restore_dirs[@]}"
+++ dirname /data/projects/legged_robot_competition_26/conf/kaiwudrl
++ dest_dir=/data/projects/legged_robot_competition_26/conf
++ mkdir -p /data/projects/legged_robot_competition_26/conf
++ '[' -d /tmp/backup/conf/kaiwudrl ']'
++ log_info 'skip restore conf/kaiwudrl (backup not exist)'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:57:06'
++ echo -e '\033[32m[INFO] [2026-05-15 06:57:06]\033[0m skip restore conf/kaiwudrl (backup not exist)'
+[32m[INFO] [2026-05-15 06:57:06][0m skip restore conf/kaiwudrl (backup not exist)
++ for dir in "${restore_dirs[@]}"
+++ dirname /data/projects/legged_robot_competition_26/kaiwudrl/conf/kaiwudrl
++ dest_dir=/data/projects/legged_robot_competition_26/kaiwudrl/conf
++ mkdir -p /data/projects/legged_robot_competition_26/kaiwudrl/conf
++ '[' -d /tmp/backup/kaiwudrl/conf/kaiwudrl ']'
++ cp -rf /tmp/backup/kaiwudrl/conf/kaiwudrl /data/projects/legged_robot_competition_26/kaiwudrl/conf
++ log_info 'restore kaiwudrl/conf/kaiwudrl success'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:57:06'
++ echo -e '\033[32m[INFO] [2026-05-15 06:57:06]\033[0m restore kaiwudrl/conf/kaiwudrl success'
+[32m[INFO] [2026-05-15 06:57:06][0m restore kaiwudrl/conf/kaiwudrl success
++ [[ battle-503371-1-job-7vsxs == *\b\a\t\t\l\e* ]]
++ exit
++ python3 /root/tools/change_nature_algo.py ppo
++ sh tools/change_alloc_process_count.sh kaiwu_env 1
+[32m kaiwu_env change alloc process count 1 success [0m
++ sh tools/change_set_name_and_uuid.sh legged_robot_competition_26_503371 503371
+[32m change /root/tools/conf/project_default.toml legged_robot_competition_26_503371 success [0m
+[32m change kaiwudrl/conf/kaiwudrl/configure.toml 503371 success [0m
++ fn=start_aisrv
++ log_info 'will call start_aisrv'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:57:06'
++ echo -e '\033[32m[INFO] [2026-05-15 06:57:06]\033[0m will call start_aisrv'
+[32m[INFO] [2026-05-15 06:57:06][0m will call start_aisrv
++ start_aisrv
++ export use_alloc=false
++ use_alloc=false
++ export use_rainbow=false
++ use_rainbow=false
++ export use_prometheus=false
++ use_prometheus=false
++ export run_mode=eval
++ run_mode=eval
+++ date +%s%3N
++ random_seed=1778799426326
++ '[' battle = race ']'
++ export RANDOM_SEED=1778799426326
++ RANDOM_SEED=1778799426326
++ python3 /root/tools/toml_replace.py
+配置文件已合并并写回到 /data/projects/legged_robot_competition_26/tools/eval/conf/eval_env_conf.toml
++ '[' 0 -ne 0 ']'
++ sh /root/tools/check_eval_model_and_algo_valid.sh
++++ dirname /root/tools/check_eval_model_and_algo_valid.sh
+++ cd /root/tools
+++ pwd
++ shell_dir=/root/tools
++ . /root/tools/common.sh
+++++ dirname /root/tools/common.sh
++++ cd /root/tools
++++ pwd
+++ tools_dir=/root/tools
+++ . /root/tools/constant.sh
++++ app=legged_robot_competition_26
++++ algo=ppo
++++ parallel_env_per_aisrv=1
++++ env_num=
++++ aisrv_num=
++++ task_id=503371
++++ max_step=2000
++++ owner_type=battle
++++ aisrv_env_ipc_method=zmq
++++ ROLE_BATTLE_SERVER=1
++++ ROLE_LEARNER=4
++++ ROLE_MASTER_LEARNER=5
++++ ide_language=zh-cn
++++ scale_type=small
++++ training_mode=
++++ task_uuid=
++++ set_index=
++++ set_cnt=
++++ task_id=503371
++++ round_index=1
++++ owner_id=0
++++ have_abs=no
++++ quick_review_data_type=frame
++++ declare -A project_algorithm_list
++++ project_algorithm_list["back_to_the_realm_v2"]='agent_target_dqn agent_dqn agent_diy agent_ppo'
++++ project_algorithm_list["back_to_the_realm"]='agent_target_dqn agent_dqn agent_diy'
++++ project_algorithm_list["gorge_walk"]='agent_dynamic_programming agent_diy agent_sarsa agent_q_learning agent_monte_carlo'
++++ project_algorithm_list["gorge_walk_v2"]='agent_dynamic_programming agent_diy agent_sarsa agent_q_learning agent_monte_carlo'
++++ project_algorithm_list["intelligent_traffic_lights"]='agent_dynamic_webster agent_target_dqn agent_dqn agent_diy agent_ppo'
++++ project_algorithm_list["intelligent_traffic_lights_v2"]='agent_dynamic_webster agent_target_dqn agent_dqn agent_diy'
++++ project_algorithm_list["infinity_valley"]='agent_policy_gradient agent_a2c agent_diy agent_ppo'
++++ project_algorithm_list["hok1v1"]='agent_diy agent_ppo'
++++ project_algorithm_list["hok3v3_collaboration"]='agent_diy agent_ppo'
++++ project_algorithm_list["hok5v5_dld"]='agent_diy agent_ppo'
++++ project_algorithm_list["legged_robot_locomotion_control"]='agent_diy agent_ppo'
++++ project_algorithm_list["legged_robot_exp"]='agent_diy agent_ppo'
++++ project_algorithm_list["legged_robot_sim2real_exp"]='agent_diy agent_ppo'
++++ project_algorithm_list["legged_robot_competition_26"]='agent_diy agent_ppo'
++++ project_algorithm_list["drone_delivery"]='agent_diy agent_ppo'
++++ project_algorithm_list["robot_vacuum"]='agent_diy agent_ppo'
++++ project_algorithm_list["gorge_chase"]='agent_diy agent_ppo'
++++ project_algorithm_list["drone"]='agent_diy agent_ppo agent_a2c agent_target_dqn agent_dqn isaac_env'
++++ project_algorithm_list["drone_obstacle_nav"]='agent_diy agent_ppo'
++++ project_algorithm_list["truss"]='agent_mcts agent_dqn agent_diy agent_ppo truss_env'
++++ [[ -n '' ]]
++++ user_save_mode_max_counts["back_to_the_realm_v2"]=200
++++ user_save_mode_max_counts["back_to_the_realm"]=200
++++ user_save_mode_max_counts["gorge_walk"]=200
++++ user_save_mode_max_counts["gorge_walk_v2"]=200
++++ user_save_mode_max_counts["intelligent_traffic_lights"]=200
++++ user_save_mode_max_counts["intelligent_traffic_lights_v2"]=200
++++ user_save_mode_max_counts["infinity_valley"]=200
++++ user_save_mode_max_counts["hok1v1"]=200
++++ user_save_mode_max_counts["hok3v3_collaboration"]=200
++++ user_save_mode_max_counts["hok5v5_dld"]=200
++++ user_save_mode_max_counts["legged_robot_locomotion_control"]=200
++++ user_save_mode_max_counts["legged_robot_exp"]=200
++++ user_save_mode_max_counts["legged_robot_sim2real_exp"]=200
++++ user_save_mode_max_counts["legged_robot_competition_26"]=200
++++ user_save_mode_max_counts["drone_delivery"]=200
++++ user_save_mode_max_counts["robot_vacuum"]=200
++++ user_save_mode_max_counts["gorge_chase"]=200
++++ user_save_mode_max_counts["drone"]=200
++++ user_save_mode_max_counts["drone_obstacle_nav"]=200
++++ user_save_mode_max_counts["truss"]=200
++++ user_save_model_max_frequency_per_mins["back_to_the_realm_v2"]=2
++++ user_save_model_max_frequency_per_mins["back_to_the_realm"]=2
++++ user_save_model_max_frequency_per_mins["gorge_walk"]=2
++++ user_save_model_max_frequency_per_mins["gorge_walk_v2"]=2
++++ user_save_model_max_frequency_per_mins["intelligent_traffic_lights"]=2
++++ user_save_model_max_frequency_per_mins["intelligent_traffic_lights_v2"]=2
++++ user_save_model_max_frequency_per_mins["infinity_valley"]=2
++++ user_save_model_max_frequency_per_mins["hok1v1"]=2
++++ user_save_model_max_frequency_per_mins["hok3v3_collaboration"]=2
++++ user_save_model_max_frequency_per_mins["hok5v5_dld"]=2
++++ user_save_model_max_frequency_per_mins["legged_robot_locomotion_control"]=2
++++ user_save_model_max_frequency_per_mins["legged_robot_exp"]=2
++++ user_save_model_max_frequency_per_mins["legged_robot_sim2real_exp"]=2
++++ user_save_model_max_frequency_per_mins["legged_robot_competition_26"]=2
++++ user_save_model_max_frequency_per_mins["drone_delivery"]=2
++++ user_save_model_max_frequency_per_mins["robot_vacuum"]=2
++++ user_save_model_max_frequency_per_mins["gorge_chase"]=2
++++ user_save_model_max_frequency_per_mins["drone"]=2
++++ user_save_model_max_frequency_per_mins["drone_obstacle_nav"]=2
++++ user_save_model_max_frequency_per_mins["truss"]=2
+++ project_dir=/data/projects/legged_robot_competition_26
+++ mkdir -p /data/projects/legged_robot_competition_26
+++ host_ip=get_host_ip
++ kaiwu_json=/data/projects/legged_robot_competition_26/ckpt/kaiwu.json
++ '[' '!' -f /data/projects/legged_robot_competition_26/ckpt/kaiwu.json ']'
+++ jq -r .project_code /data/projects/legged_robot_competition_26/ckpt/kaiwu.json
++ json_project_code=legged_robot_competition_26
+++ jq -r .algorithm /data/projects/legged_robot_competition_26/ckpt/kaiwu.json
++ json_algorithm=ppo
++ '[' -z legged_robot_competition_26 ']'
++ '[' legged_robot_competition_26 == null ']'
++ '[' -z ppo ']'
++ '[' ppo == null ']'
++ '[' legged_robot_competition_26 '!=' legged_robot_competition_26 ']'
++ '[' ppo '!=' ppo ']'
++ log_info 'check passed: project_code='\''legged_robot_competition_26'\'', algorithm='\''ppo'\'''
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:57:06'
++ echo -e '\033[32m[INFO] [2026-05-15 06:57:06]\033[0m check passed: project_code='\''legged_robot_competition_26'\'', algorithm='\''ppo'\'''
+[32m[INFO] [2026-05-15 06:57:06][0m check passed: project_code='legged_robot_competition_26', algorithm='ppo'
++ '[' 0 -ne 0 ']'
++ cp /data/projects/legged_robot_competition_26/tools/isaac_env/legged_robot.py unitree_rl_gym/legged_gym/envs/base/legged_robot.py
+cp: cannot stat '/data/projects/legged_robot_competition_26/tools/isaac_env/legged_robot.py': No such file or directory
++ cp /data/projects/legged_robot_competition_26/tools/isaac_env/terrain.py unitree_rl_gym/legged_gym/utils/terrain.py
+cp: cannot stat '/data/projects/legged_robot_competition_26/tools/isaac_env/terrain.py': No such file or directory
++ sh /root/tools/change_algorithm_all.sh ppo
++++ dirname /root/tools/change_algorithm_all.sh
+++ cd /root/tools
+++ pwd
++ shell_dir=/root/tools
++ . /root/tools/common.sh
+++++ dirname /root/tools/common.sh
++++ cd /root/tools
++++ pwd
+++ tools_dir=/root/tools
+++ . /root/tools/constant.sh
++++ app=legged_robot_competition_26
++++ algo=ppo
++++ parallel_env_per_aisrv=1
++++ env_num=
++++ aisrv_num=
++++ task_id=503371
++++ max_step=2000
++++ owner_type=battle
++++ aisrv_env_ipc_method=zmq
++++ ROLE_BATTLE_SERVER=1
++++ ROLE_LEARNER=4
++++ ROLE_MASTER_LEARNER=5
++++ ide_language=zh-cn
++++ scale_type=small
++++ training_mode=
++++ task_uuid=
++++ set_index=
++++ set_cnt=
++++ task_id=503371
++++ round_index=1
++++ owner_id=0
++++ have_abs=no
++++ quick_review_data_type=frame
++++ declare -A project_algorithm_list
++++ project_algorithm_list["back_to_the_realm_v2"]='agent_target_dqn agent_dqn agent_diy agent_ppo'
++++ project_algorithm_list["back_to_the_realm"]='agent_target_dqn agent_dqn agent_diy'
++++ project_algorithm_list["gorge_walk"]='agent_dynamic_programming agent_diy agent_sarsa agent_q_learning agent_monte_carlo'
++++ project_algorithm_list["gorge_walk_v2"]='agent_dynamic_programming agent_diy agent_sarsa agent_q_learning agent_monte_carlo'
++++ project_algorithm_list["intelligent_traffic_lights"]='agent_dynamic_webster agent_target_dqn agent_dqn agent_diy agent_ppo'
++++ project_algorithm_list["intelligent_traffic_lights_v2"]='agent_dynamic_webster agent_target_dqn agent_dqn agent_diy'
++++ project_algorithm_list["infinity_valley"]='agent_policy_gradient agent_a2c agent_diy agent_ppo'
++++ project_algorithm_list["hok1v1"]='agent_diy agent_ppo'
++++ project_algorithm_list["hok3v3_collaboration"]='agent_diy agent_ppo'
++++ project_algorithm_list["hok5v5_dld"]='agent_diy agent_ppo'
++++ project_algorithm_list["legged_robot_locomotion_control"]='agent_diy agent_ppo'
++++ project_algorithm_list["legged_robot_exp"]='agent_diy agent_ppo'
++++ project_algorithm_list["legged_robot_sim2real_exp"]='agent_diy agent_ppo'
++++ project_algorithm_list["legged_robot_competition_26"]='agent_diy agent_ppo'
++++ project_algorithm_list["drone_delivery"]='agent_diy agent_ppo'
++++ project_algorithm_list["robot_vacuum"]='agent_diy agent_ppo'
++++ project_algorithm_list["gorge_chase"]='agent_diy agent_ppo'
++++ project_algorithm_list["drone"]='agent_diy agent_ppo agent_a2c agent_target_dqn agent_dqn isaac_env'
++++ project_algorithm_list["drone_obstacle_nav"]='agent_diy agent_ppo'
++++ project_algorithm_list["truss"]='agent_mcts agent_dqn agent_diy agent_ppo truss_env'
++++ [[ -n '' ]]
++++ user_save_mode_max_counts["back_to_the_realm_v2"]=200
++++ user_save_mode_max_counts["back_to_the_realm"]=200
++++ user_save_mode_max_counts["gorge_walk"]=200
++++ user_save_mode_max_counts["gorge_walk_v2"]=200
++++ user_save_mode_max_counts["intelligent_traffic_lights"]=200
++++ user_save_mode_max_counts["intelligent_traffic_lights_v2"]=200
++++ user_save_mode_max_counts["infinity_valley"]=200
++++ user_save_mode_max_counts["hok1v1"]=200
++++ user_save_mode_max_counts["hok3v3_collaboration"]=200
++++ user_save_mode_max_counts["hok5v5_dld"]=200
++++ user_save_mode_max_counts["legged_robot_locomotion_control"]=200
++++ user_save_mode_max_counts["legged_robot_exp"]=200
++++ user_save_mode_max_counts["legged_robot_sim2real_exp"]=200
++++ user_save_mode_max_counts["legged_robot_competition_26"]=200
++++ user_save_mode_max_counts["drone_delivery"]=200
++++ user_save_mode_max_counts["robot_vacuum"]=200
++++ user_save_mode_max_counts["gorge_chase"]=200
++++ user_save_mode_max_counts["drone"]=200
++++ user_save_mode_max_counts["drone_obstacle_nav"]=200
++++ user_save_mode_max_counts["truss"]=200
++++ user_save_model_max_frequency_per_mins["back_to_the_realm_v2"]=2
++++ user_save_model_max_frequency_per_mins["back_to_the_realm"]=2
++++ user_save_model_max_frequency_per_mins["gorge_walk"]=2
++++ user_save_model_max_frequency_per_mins["gorge_walk_v2"]=2
++++ user_save_model_max_frequency_per_mins["intelligent_traffic_lights"]=2
++++ user_save_model_max_frequency_per_mins["intelligent_traffic_lights_v2"]=2
++++ user_save_model_max_frequency_per_mins["infinity_valley"]=2
++++ user_save_model_max_frequency_per_mins["hok1v1"]=2
++++ user_save_model_max_frequency_per_mins["hok3v3_collaboration"]=2
++++ user_save_model_max_frequency_per_mins["hok5v5_dld"]=2
++++ user_save_model_max_frequency_per_mins["legged_robot_locomotion_control"]=2
++++ user_save_model_max_frequency_per_mins["legged_robot_exp"]=2
++++ user_save_model_max_frequency_per_mins["legged_robot_sim2real_exp"]=2
++++ user_save_model_max_frequency_per_mins["legged_robot_competition_26"]=2
++++ user_save_model_max_frequency_per_mins["drone_delivery"]=2
++++ user_save_model_max_frequency_per_mins["robot_vacuum"]=2
++++ user_save_model_max_frequency_per_mins["gorge_chase"]=2
++++ user_save_model_max_frequency_per_mins["drone"]=2
++++ user_save_model_max_frequency_per_mins["drone_obstacle_nav"]=2
++++ user_save_model_max_frequency_per_mins["truss"]=2
+++ project_dir=/data/projects/legged_robot_competition_26
+++ mkdir -p /data/projects/legged_robot_competition_26
+++ host_ip=get_host_ip
++ IFS=' '
++ read -r -a algorithm_array
++ '[' 1 -ne 1 ']'
++ algorithm_name=ppo
++ is_supported=false
++ for algo in "${algorithm_array[@]}"
++ [[ agent_diy == \a\g\e\n\t\_* ]]
++ is_supported=true
++ break
++ true
++ echo -e '\033[32m algorithm_name is ppo \033[0m'
+[32m algorithm_name is ppo [0m
++ kaiwudrl_configure_file=conf/kaiwudrl/configure.toml
++ '[' -f conf/kaiwudrl/configure.toml ']'
++ kaiwudrl_configure_file_v2=kaiwudrl/conf/kaiwudrl/configure.toml
++ '[' -f kaiwudrl/conf/kaiwudrl/configure.toml ']'
++ sed -i 's/user_save_mode_max_count = .*/user_save_mode_max_count = 200/' kaiwudrl/conf/kaiwudrl/configure.toml
++ sed -i 's/user_save_model_max_frequency_per_min = .*/user_save_model_max_frequency_per_min = 2/' kaiwudrl/conf/kaiwudrl/configure.toml
++ sed -i 's/algo = .*/algo = "ppo"/' kaiwudrl/conf/kaiwudrl/configure.toml
++ judge_success_or_fail 0 'change kaiwudrl/conf/kaiwudrl/configure.toml ppo'
++ result=0
++ message='change kaiwudrl/conf/kaiwudrl/configure.toml ppo'
++ '[' 0 -ne 0 ']'
++ echo -e '\033[32m change kaiwudrl/conf/kaiwudrl/configure.toml ppo success \033[0m'
+[32m change kaiwudrl/conf/kaiwudrl/configure.toml ppo success [0m
++ project_default_configure_file=/root/tools/conf/project_default.toml
++ '[' -f /root/tools/conf/project_default.toml ']'
++ sed -i 's/algo = .*/algo = "ppo"/' /root/tools/conf/project_default.toml
++ judge_success_or_fail 0 'change /root/tools/conf/project_default.toml ppo'
++ result=0
++ message='change /root/tools/conf/project_default.toml ppo'
++ '[' 0 -ne 0 ']'
++ echo -e '\033[32m change /root/tools/conf/project_default.toml ppo success \033[0m'
+[32m change /root/tools/conf/project_default.toml ppo success [0m
++ app_configure_file_v1=conf/configure_app.toml
++ '[' -f conf/configure_app.toml ']'
++ sed -i 's/algo = .*/algo = "ppo"/' conf/configure_app.toml
++ judge_success_or_fail 0 'change conf/configure_app.toml ppo'
++ result=0
++ message='change conf/configure_app.toml ppo'
++ '[' 0 -ne 0 ']'
++ echo -e '\033[32m change conf/configure_app.toml ppo success \033[0m'
+[32m change conf/configure_app.toml ppo success [0m
++ app_configure_file_v2=conf/app_conf_legged_robot_competition_26.toml
++ '[' -f conf/app_conf_legged_robot_competition_26.toml ']'
++ sed -i 's/algo = .*/algo = "ppo"/' conf/app_conf_legged_robot_competition_26.toml
++ judge_success_or_fail 0 'change conf/app_conf_legged_robot_competition_26.toml ppo'
++ result=0
++ message='change conf/app_conf_legged_robot_competition_26.toml ppo'
++ '[' 0 -ne 0 ']'
++ echo -e '\033[32m change conf/app_conf_legged_robot_competition_26.toml ppo success \033[0m'
+[32m change conf/app_conf_legged_robot_competition_26.toml ppo success [0m
++ source /opt/conda/etc/profile.d/conda.sh
+++ export CONDA_EXE=/opt/conda/bin/conda
+++ CONDA_EXE=/opt/conda/bin/conda
+++ export _CONDA_EXE=/opt/conda/bin/conda
+++ _CONDA_EXE=/opt/conda/bin/conda
+++ export _CE_M=
+++ _CE_M=
+++ export _CE_CONDA=
+++ _CE_CONDA=
+++ export CONDA_PYTHON_EXE=/opt/conda/bin/python
+++ CONDA_PYTHON_EXE=/opt/conda/bin/python
+++ export _CONDA_ROOT=/opt/conda
+++ _CONDA_ROOT=/opt/conda
+++ '[' -z '' ']'
+++ export CONDA_SHLVL=0
+++ CONDA_SHLVL=0
+++ '[' -n '' ']'
+++++ dirname /opt/conda/bin/conda
++++ dirname /opt/conda/bin
+++ PATH=/opt/conda/condabin:/usr/local/bin:/root/.local/bin:/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+++ export PATH
+++ '[' -z '' ']'
+++ PS1=
++ conda activate env_isaaclab
++ local cmd=activate
++ case "$cmd" in
++ __conda_activate activate env_isaaclab
++ '[' -n '' ']'
++ local ask_conda
+++ PS1=
+++ __conda_exe shell.posix activate env_isaaclab
+++ '[' -n '' ']'
+++ /opt/conda/bin/conda shell.posix activate env_isaaclab
++ ask_conda='export _CE_M='\'''\''
+export _CE_CONDA='\'''\''
+PS1='\''(env_isaaclab) '\''
+export PATH='\''/opt/conda/envs/env_isaaclab/bin:/opt/conda/condabin:/usr/local/bin:/root/.local/bin:/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'\''
+export CONDA_PREFIX='\''/opt/conda/envs/env_isaaclab'\''
+export CONDA_SHLVL='\''1'\''
+export CONDA_DEFAULT_ENV='\''env_isaaclab'\''
+export CONDA_PROMPT_MODIFIER='\''(env_isaaclab) '\''
+export CONDA_EXE='\''/opt/conda/bin/conda'\''
+export _CONDA_EXE='\''/opt/conda/bin/conda'\''
+export CONDA_PYTHON_EXE='\''/opt/conda/bin/python'\''
+export _CONDA_ROOT='\''/opt/conda'\''
+. "/opt/conda/envs/env_isaaclab/etc/conda/activate.d/setenv.sh"
+. "/opt/conda/envs/env_isaaclab/etc/conda/activate.d/torch_gomp.sh"'
++ eval 'export _CE_M='\'''\''
+export _CE_CONDA='\'''\''
+PS1='\''(env_isaaclab) '\''
+export PATH='\''/opt/conda/envs/env_isaaclab/bin:/opt/conda/condabin:/usr/local/bin:/root/.local/bin:/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'\''
+export CONDA_PREFIX='\''/opt/conda/envs/env_isaaclab'\''
+export CONDA_SHLVL='\''1'\''
+export CONDA_DEFAULT_ENV='\''env_isaaclab'\''
+export CONDA_PROMPT_MODIFIER='\''(env_isaaclab) '\''
+export CONDA_EXE='\''/opt/conda/bin/conda'\''
+export _CONDA_EXE='\''/opt/conda/bin/conda'\''
+export CONDA_PYTHON_EXE='\''/opt/conda/bin/python'\''
+export _CONDA_ROOT='\''/opt/conda'\''
+. "/opt/conda/envs/env_isaaclab/etc/conda/activate.d/setenv.sh"
+. "/opt/conda/envs/env_isaaclab/etc/conda/activate.d/torch_gomp.sh"'
+++ export _CE_M=
+++ _CE_M=
+++ export _CE_CONDA=
+++ _CE_CONDA=
+++ PS1='(env_isaaclab) '
+++ export PATH=/opt/conda/envs/env_isaaclab/bin:/opt/conda/condabin:/usr/local/bin:/root/.local/bin:/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+++ PATH=/opt/conda/envs/env_isaaclab/bin:/opt/conda/condabin:/usr/local/bin:/root/.local/bin:/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+++ export CONDA_PREFIX=/opt/conda/envs/env_isaaclab
+++ CONDA_PREFIX=/opt/conda/envs/env_isaaclab
+++ export CONDA_SHLVL=1
+++ CONDA_SHLVL=1
+++ export CONDA_DEFAULT_ENV=env_isaaclab
+++ CONDA_DEFAULT_ENV=env_isaaclab
+++ export 'CONDA_PROMPT_MODIFIER=(env_isaaclab) '
+++ CONDA_PROMPT_MODIFIER='(env_isaaclab) '
+++ export CONDA_EXE=/opt/conda/bin/conda
+++ CONDA_EXE=/opt/conda/bin/conda
+++ export _CONDA_EXE=/opt/conda/bin/conda
+++ _CONDA_EXE=/opt/conda/bin/conda
+++ export CONDA_PYTHON_EXE=/opt/conda/bin/python
+++ CONDA_PYTHON_EXE=/opt/conda/bin/python
+++ export _CONDA_ROOT=/opt/conda
+++ _CONDA_ROOT=/opt/conda
+++ . /opt/conda/envs/env_isaaclab/etc/conda/activate.d/setenv.sh
++++ export ISAACLAB_PATH=/workspace/isaaclab
++++ ISAACLAB_PATH=/workspace/isaaclab
++++ alias isaaclab=/workspace/isaaclab/isaaclab.sh
++++ export RESOURCE_NAME=IsaacSim
++++ RESOURCE_NAME=IsaacSim
++++ source /workspace/isaaclab/_isaac_sim/setup_conda_env.sh
+++++++ dirname /workspace/isaaclab/_isaac_sim/setup_conda_env.sh
++++++ cd /workspace/isaaclab/_isaac_sim
++++++ pwd
+++++ SCRIPT_DIR=/workspace/isaaclab/_isaac_sim
+++++ '[' -n '' ']'
++++++ realpath -s /workspace/isaaclab/_isaac_sim
+++++ MY_DIR=/workspace/isaaclab/_isaac_sim
+++++ export CARB_APP_PATH=/workspace/isaaclab/_isaac_sim/kit
+++++ CARB_APP_PATH=/workspace/isaaclab/_isaac_sim/kit
+++++ export EXP_PATH=/workspace/isaaclab/_isaac_sim/apps
+++++ EXP_PATH=/workspace/isaaclab/_isaac_sim/apps
+++++ export ISAAC_PATH=/workspace/isaaclab/_isaac_sim
+++++ ISAAC_PATH=/workspace/isaaclab/_isaac_sim
+++++ cd /workspace/isaaclab/_isaac_sim
+++++ . ./setup_python_env.sh
++++++++ dirname ./setup_python_env.sh
+++++++ cd .
+++++++ pwd
++++++ SCRIPT_DIR=/workspace/isaaclab/_isaac_sim
++++++ export PYTHONPATH=/data/projects/legged_robot_competition_26:/opt/conda/envs/env_isaaclab/lib/python3.11/site-packages:/workspace/isaaclab/_isaac_sim/kit/python/lib/python3.11:/workspace/isaaclab/_isaac_sim/kit/python/lib/python3.11/site-packages:/workspace/isaaclab/_isaac_sim/python_packages:/workspace/isaaclab/_isaac_sim/exts/isaacsim.simulation_app:/workspace/isaaclab/_isaac_sim/extsDeprecated/omni.isaac.kit:/workspace/isaaclab/_isaac_sim/kit/kernel/py:/workspace/isaaclab/_isaac_sim/kit/plugins/bindings-python:/workspace/isaaclab/_isaac_sim/exts/isaacsim.robot_motion.lula/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/isaacsim.asset.exporter.urdf/pip_prebundle:/workspace/isaaclab/_isaac_sim/extscache/omni.kit.pip_archive-0.0.0+69cbf6ad.lx64.cp311/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.isaac.core_archive/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.isaac.ml_archive/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.pip.compute/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.pip.cloud/pip_prebundle
++++++ PYTHONPATH=/data/projects/legged_robot_competition_26:/opt/conda/envs/env_isaaclab/lib/python3.11/site-packages:/workspace/isaaclab/_isaac_sim/kit/python/lib/python3.11:/workspace/isaaclab/_isaac_sim/kit/python/lib/python3.11/site-packages:/workspace/isaaclab/_isaac_sim/python_packages:/workspace/isaaclab/_isaac_sim/exts/isaacsim.simulation_app:/workspace/isaaclab/_isaac_sim/extsDeprecated/omni.isaac.kit:/workspace/isaaclab/_isaac_sim/kit/kernel/py:/workspace/isaaclab/_isaac_sim/kit/plugins/bindings-python:/workspace/isaaclab/_isaac_sim/exts/isaacsim.robot_motion.lula/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/isaacsim.asset.exporter.urdf/pip_prebundle:/workspace/isaaclab/_isaac_sim/extscache/omni.kit.pip_archive-0.0.0+69cbf6ad.lx64.cp311/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.isaac.core_archive/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.isaac.ml_archive/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.pip.compute/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.pip.cloud/pip_prebundle
++++++ export LD_LIBRARY_PATH=:/workspace/isaaclab/_isaac_sim/.:/workspace/isaaclab/_isaac_sim/exts/isaacsim.robot.schema/plugins/lib:/workspace/isaaclab/_isaac_sim/exts/isaacsim.robot_motion.lula/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/isaacsim.asset.exporter.urdf/pip_prebundle:/workspace/isaaclab/_isaac_sim/kit:/workspace/isaaclab/_isaac_sim/kit/kernel/plugins:/workspace/isaaclab/_isaac_sim/kit/libs/iray:/workspace/isaaclab/_isaac_sim/kit/plugins:/workspace/isaaclab/_isaac_sim/kit/plugins/bindings-python:/workspace/isaaclab/_isaac_sim/kit/plugins/carb_gfx:/workspace/isaaclab/_isaac_sim/kit/plugins/rtx:/workspace/isaaclab/_isaac_sim/kit/plugins/gpu.foundation
++++++ LD_LIBRARY_PATH=:/workspace/isaaclab/_isaac_sim/.:/workspace/isaaclab/_isaac_sim/exts/isaacsim.robot.schema/plugins/lib:/workspace/isaaclab/_isaac_sim/exts/isaacsim.robot_motion.lula/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/isaacsim.asset.exporter.urdf/pip_prebundle:/workspace/isaaclab/_isaac_sim/kit:/workspace/isaaclab/_isaac_sim/kit/kernel/plugins:/workspace/isaaclab/_isaac_sim/kit/libs/iray:/workspace/isaaclab/_isaac_sim/kit/plugins:/workspace/isaaclab/_isaac_sim/kit/plugins/bindings-python:/workspace/isaaclab/_isaac_sim/kit/plugins/carb_gfx:/workspace/isaaclab/_isaac_sim/kit/plugins/rtx:/workspace/isaaclab/_isaac_sim/kit/plugins/gpu.foundation
+++++ cd /data/projects/legged_robot_competition_26
++++++ echo /data/projects/legged_robot_competition_26:/opt/conda/envs/env_isaaclab/lib/python3.11/site-packages:/workspace/isaaclab/_isaac_sim/kit/python/lib/python3.11:/workspace/isaaclab/_isaac_sim/kit/python/lib/python3.11/site-packages:/workspace/isaaclab/_isaac_sim/python_packages:/workspace/isaaclab/_isaac_sim/exts/isaacsim.simulation_app:/workspace/isaaclab/_isaac_sim/extsDeprecated/omni.isaac.kit:/workspace/isaaclab/_isaac_sim/kit/kernel/py:/workspace/isaaclab/_isaac_sim/kit/plugins/bindings-python:/workspace/isaaclab/_isaac_sim/exts/isaacsim.robot_motion.lula/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/isaacsim.asset.exporter.urdf/pip_prebundle:/workspace/isaaclab/_isaac_sim/extscache/omni.kit.pip_archive-0.0.0+69cbf6ad.lx64.cp311/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.isaac.core_archive/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.isaac.ml_archive/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.pip.compute/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.pip.cloud/pip_prebundle
++++++ tr : '\n'
++++++ grep -v /workspace/isaaclab/_isaac_sim/kit/python/lib/python3.11
++++++ tr '\n' :
++++++ sed 's/:$//'
+++++ export PYTHONPATH=/data/projects/legged_robot_competition_26:/opt/conda/envs/env_isaaclab/lib/python3.11/site-packages:/workspace/isaaclab/_isaac_sim/python_packages:/workspace/isaaclab/_isaac_sim/exts/isaacsim.simulation_app:/workspace/isaaclab/_isaac_sim/extsDeprecated/omni.isaac.kit:/workspace/isaaclab/_isaac_sim/kit/kernel/py:/workspace/isaaclab/_isaac_sim/kit/plugins/bindings-python:/workspace/isaaclab/_isaac_sim/exts/isaacsim.robot_motion.lula/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/isaacsim.asset.exporter.urdf/pip_prebundle:/workspace/isaaclab/_isaac_sim/extscache/omni.kit.pip_archive-0.0.0+69cbf6ad.lx64.cp311/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.isaac.core_archive/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.isaac.ml_archive/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.pip.compute/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.pip.cloud/pip_prebundle
+++++ PYTHONPATH=/data/projects/legged_robot_competition_26:/opt/conda/envs/env_isaaclab/lib/python3.11/site-packages:/workspace/isaaclab/_isaac_sim/python_packages:/workspace/isaaclab/_isaac_sim/exts/isaacsim.simulation_app:/workspace/isaaclab/_isaac_sim/extsDeprecated/omni.isaac.kit:/workspace/isaaclab/_isaac_sim/kit/kernel/py:/workspace/isaaclab/_isaac_sim/kit/plugins/bindings-python:/workspace/isaaclab/_isaac_sim/exts/isaacsim.robot_motion.lula/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/isaacsim.asset.exporter.urdf/pip_prebundle:/workspace/isaaclab/_isaac_sim/extscache/omni.kit.pip_archive-0.0.0+69cbf6ad.lx64.cp311/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.isaac.core_archive/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.isaac.ml_archive/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.pip.compute/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.pip.cloud/pip_prebundle
+++ . /opt/conda/envs/env_isaaclab/etc/conda/activate.d/torch_gomp.sh
++++ : ''
+++++ /opt/conda/envs/env_isaaclab/bin/python -
++++ __gomp=
++++ '[' -n '' ']'
++++ unset __gomp
++ __conda_hashr
++ '[' -n '' ']'
++ '[' -n '' ']'
++ hash -r
++ export PYTHONPATH=/data/projects/legged_robot_competition_26:/data/projects/legged_robot_competition_26:/opt/conda/envs/env_isaaclab/lib/python3.11/site-packages:/workspace/isaaclab/_isaac_sim/python_packages:/workspace/isaaclab/_isaac_sim/exts/isaacsim.simulation_app:/workspace/isaaclab/_isaac_sim/extsDeprecated/omni.isaac.kit:/workspace/isaaclab/_isaac_sim/kit/kernel/py:/workspace/isaaclab/_isaac_sim/kit/plugins/bindings-python:/workspace/isaaclab/_isaac_sim/exts/isaacsim.robot_motion.lula/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/isaacsim.asset.exporter.urdf/pip_prebundle:/workspace/isaaclab/_isaac_sim/extscache/omni.kit.pip_archive-0.0.0+69cbf6ad.lx64.cp311/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.isaac.core_archive/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.isaac.ml_archive/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.pip.compute/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.pip.cloud/pip_prebundle
++ PYTHONPATH=/data/projects/legged_robot_competition_26:/data/projects/legged_robot_competition_26:/opt/conda/envs/env_isaaclab/lib/python3.11/site-packages:/workspace/isaaclab/_isaac_sim/python_packages:/workspace/isaaclab/_isaac_sim/exts/isaacsim.simulation_app:/workspace/isaaclab/_isaac_sim/extsDeprecated/omni.isaac.kit:/workspace/isaaclab/_isaac_sim/kit/kernel/py:/workspace/isaaclab/_isaac_sim/kit/plugins/bindings-python:/workspace/isaaclab/_isaac_sim/exts/isaacsim.robot_motion.lula/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/isaacsim.asset.exporter.urdf/pip_prebundle:/workspace/isaaclab/_isaac_sim/extscache/omni.kit.pip_archive-0.0.0+69cbf6ad.lx64.cp311/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.isaac.core_archive/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.isaac.ml_archive/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.pip.compute/pip_prebundle:/workspace/isaaclab/_isaac_sim/exts/omni.pip.cloud/pip_prebundle
++ sh tools/start.sh all
+[32m change_tcp_parameter success [0m
+eth1: error fetching interface information: Device not found
+[32m aisrv produce config success [0m
+eth1: error fetching interface information: Device not found
+[32m actor produce config success [0m
+eth1: error fetching interface information: Device not found
+[32m learner produce config success [0m
+[32m modelpool learner old file delete success [0m
+[32m modelpool learner start success [0m
+[32m machine architecture information: x86_64  [0m
+[32m gpu engine is CPU [0m
+[31m current GPU machine is not A100, V100, T4, P100 [0m
+[31m current GPU machine is CPU, so not need copy tensorrt file [0m
+[32m learner single start success [0m
+[32m aisrv start success [0m
++ check_battle_result
++ cd /workspace/battle/503371_1_1
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:57:23'
++ echo -e '\033[32m[INFO] [2026-05-15 06:57:23]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:57:33'
++ echo -e '\033[32m[INFO] [2026-05-15 06:57:33]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:57:43'
++ echo -e '\033[32m[INFO] [2026-05-15 06:57:43]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:57:53'
++ echo -e '\033[32m[INFO] [2026-05-15 06:57:53]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:58:03'
++ echo -e '\033[32m[INFO] [2026-05-15 06:58:03]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:58:13'
++ echo -e '\033[32m[INFO] [2026-05-15 06:58:13]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:58:23'
++ echo -e '\033[32m[INFO] [2026-05-15 06:58:23]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:58:33'
++ echo -e '\033[32m[INFO] [2026-05-15 06:58:33]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:58:43'
++ echo -e '\033[32m[INFO] [2026-05-15 06:58:43]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:58:53'
++ echo -e '\033[32m[INFO] [2026-05-15 06:58:53]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:59:03'
++ echo -e '\033[32m[INFO] [2026-05-15 06:59:03]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:59:13'
++ echo -e '\033[32m[INFO] [2026-05-15 06:59:13]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:59:23'
++ echo -e '\033[32m[INFO] [2026-05-15 06:59:23]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:59:33'
++ echo -e '\033[32m[INFO] [2026-05-15 06:59:33]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:59:43'
++ echo -e '\033[32m[INFO] [2026-05-15 06:59:43]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 06:59:53'
++ echo -e '\033[32m[INFO] [2026-05-15 06:59:53]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 07:00:03'
++ echo -e '\033[32m[INFO] [2026-05-15 07:00:03]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 07:00:13'
++ echo -e '\033[32m[INFO] [2026-05-15 07:00:13]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 07:00:23'
++ echo -e '\033[32m[INFO] [2026-05-15 07:00:23]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 07:00:33'
++ echo -e '\033[32m[INFO] [2026-05-15 07:00:33]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 07:00:43'
++ echo -e '\033[32m[INFO] [2026-05-15 07:00:43]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
++ log_info 'aisrv is running'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 07:00:53'
++ echo -e '\033[32m[INFO] [2026-05-15 07:00:53]\033[0m aisrv is running'
++ sleep 10
++ true
++ '[' -f /data/ckpt/legged_robot_competition_26_ppo/process_stop.done ']'
+++ cat /data/ckpt/legged_robot_competition_26_ppo/process_stop.done
++ exit_code=0
++ '[' 0 -ne 0 ']'
++ break
++ log_info 'aisrv ends, start to search result.json'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 07:01:03'
++ echo -e '\033[32m[INFO] [2026-05-15 07:01:03]\033[0m aisrv ends, start to search result.json'
++ true
++ '[' -f /workspace/battle/503371_1_1/result/503371_1_1.json ']'
++ log_info 'find the result/503371_1_1.json'
+++ date '+%Y-%m-%d %H:%M:%S'
++ now='2026-05-15 07:01:03'
++ echo -e '\033[32m[INFO] [2026-05-15 07:01:03]\033[0m find the result/503371_1_1.json'
++ sleep 5
++ mkdir -p /workspace/battle/503371_1_1/log
++ cp -r /data/projects/legged_robot_competition_26/log/aisrv /data/projects/legged_robot_competition_26/log/aisrv.log /data/projects/legged_robot_competition_26/log/learner /data/projects/legged_robot_competition_26/log/learner.log /workspace/battle/503371_1_1/log
++ mv /workspace/battle/start_aisrv.log /workspace/battle/503371_1_1/log
++ ls /workspace/battle/503371_1_1/mp4/503371_1_1.mp4.zip
++ cp -r /workspace/battle/503371_1_1/mp4/503371_1_1.mp4.zip /workspace/battle/503371_1_1/
++ cp /workspace/battle/503371_1_1/result/503371_1_1.json /workspace/battle/503371_1_1/log/503371_1_1.json
++ grep -q reward_config /data/projects/legged_robot_competition_26/ckpt/kaiwu.json
++ cp /workspace/battle/503371_1_1/result/503371_1_1.json /workspace/battle/503371_1_1/503371_1_1.json
++ break
++ sleep 5

@@ -1,0 +1,363 @@
+# =============================================================================
+# Track Navigation — Complete course traversal (5 segments ending in maze).
+# Track 导航 — 完成完整赛道（5 段子地形串联，终点为迷宫）。
+#
+# Scoring: completion_ratio * (0.4*time + 0.4*posture + 0.2*energy)
+# 评分：完成系数 * (0.4*时间 + 0.4*姿态 + 0.2*能耗)
+# Key insight: NO forward_score. The only thing that matters is REACHING THE EXIT.
+# 关键洞察：没有前进分。唯一重要的是到达出口。
+# =============================================================================
+
+# === Basic Configuration ===
+[env]
+num_envs = 4096
+episode_length_s = 20
+
+[env_conf]
+seed = 0
+
+
+# === Terrain Configuration ===
+[terrain]
+mode = "track"
+num_rows = 10
+num_cols = 10
+difficulty_range = [0.0, 1.0]
+curriculum = true
+max_init_terrain_level = 0
+
+[terrain.track]
+track_length = 5
+sub_terrains = ["pyramid_slope", "pyramid_slope_inv", "pyramid_stairs", "pyramid_stairs_inv", "open_entry_maze"]
+
+# Standard terrain proportions (required by platform validation even in track mode)
+# 标准地形比例（平台校验所需，即使 track 模式也需要存在）
+[terrain.standard.pyramid_slope]
+proportion = 0.15
+
+[terrain.standard.pyramid_slope_inv]
+proportion = 0.15
+
+[terrain.standard.pyramid_stairs]
+proportion = 0.15
+
+[terrain.standard.pyramid_stairs_inv]
+proportion = 0.35
+
+[terrain.standard.maze]
+proportion = 0.20
+
+
+# === Domain Randomization ===
+[domain_rand]
+enable_domain_rand = true
+randomize_friction = true
+friction_range = [0.45, 1.4]
+push_robots = false
+push_interval_s = 15
+max_push_vel_xy = 0.5
+
+
+# === Observation Noise ===
+[noise]
+add_noise = true
+
+
+# === Initial State ===
+[init_state]
+pos = [0.0, 0.0, 0.35]
+
+
+# === Velocity Commands: slower for safe maze traversal ===
+# === 速度指令：迷宫安全通行需要更低速度 ===
+[commands]
+resampling_time = [5.0, 8.0]
+
+[commands.limit]
+# Hard limits: NO lateral velocity at all
+# 硬约束：彻底封杀侧向速度
+lin_vel_x = [0.0, 1.0]
+lin_vel_y = [0.0, 0.0]
+ang_vel_z = [-1.5, 1.5]
+
+[commands.ranges]
+# Phase-1: navigation basics — only forward + yaw, NO lateral movement
+# 第一阶段：导航基础 — 只允许前进+转向，彻底封杀侧移
+lin_vel_x   = [0.0, 0.8]
+lin_vel_y   = [0.0, 0.0]
+ang_vel_yaw = [-1.5, 1.5]
+
+
+# =====================================================================
+# Reward Configuration
+# =====================================================================
+
+# =====================================================================
+# Phase-1 Navigation: ONLY learn "see goal → walk straight to it"
+# 第一阶段导航：只学"看见目标→朝它直走"，迷宫相关奖励全部关闭
+# =====================================================================
+
+# =====================================================================
+# Core navigation: distance-based rewards (simple, no heading calculation)
+# 核心导航：纯距离奖励（简单，不需要计算朝向）
+# =====================================================================
+
+# --- Goal proximity: DOMINANT signal (always seek goal, weight > obstacle) ---
+[rewards.goal_proximity]
+weight = 3.0
+[rewards.goal_proximity.params]
+scale = 5.0
+
+# --- Obstacle clearance: AUXILIARY signal (steep drop near obstacles) ---
+[rewards.obstacle_clearance]
+weight = 0.5
+[rewards.obstacle_clearance.params]
+obstacle_threshold = 0.05
+scale = 0.15
+
+# --- Reach goal: large sparse bonus ---
+[rewards.reach_goal]
+weight = 10.0
+[rewards.reach_goal.params]
+threshold = 0.6
+
+# --- Time penalty: small per-step ---
+[rewards.navigation_time]
+weight = -0.008
+
+# --- Velocity tracking: minimal, navigation rewards dominate ---
+[rewards.track_lin_vel_xy]
+weight = 0.3
+[rewards.track_lin_vel_xy.params]
+std = 0.25
+command_name = "base_velocity"
+
+[rewards.track_ang_vel_z]
+weight = 0.2
+[rewards.track_ang_vel_z.params]
+std = 0.25
+command_name = "base_velocity"
+
+[rewards.forward_velocity]
+weight = 0.15
+
+# --- Maze auxiliary: LOW weight, do NOT interfere with goal-heading ---
+# --- 迷宫辅助：低权重，不要干扰目标朝向主导 ---
+[rewards.obstacle_evasion]
+weight = -0.4
+[rewards.obstacle_evasion.params]
+command_name = "base_velocity"
+obstacle_threshold = -0.3
+near_x_end = 10
+body_y_start = 3
+body_y_end = 13
+turn_std = 0.5
+
+[rewards.maze_clear_ahead]
+weight = 0.2
+[rewards.maze_clear_ahead.params]
+obstacle_threshold = 0.05
+ahead_y_start = 8
+ahead_y_end = 14
+min_command = 0.15
+
+[rewards.maze_centering]
+weight = 0.15
+[rewards.maze_centering.params]
+wall_threshold = 0.10
+
+[rewards.maze_turn_when_blocked]
+weight = 0.15
+[rewards.maze_turn_when_blocked.params]
+obstacle_threshold = 0.05
+ahead_y_start = 8
+ahead_y_end = 14
+turn_threshold = 0.15
+
+[rewards.maze_exploration]
+weight = -0.10
+[rewards.maze_exploration.params]
+revisit_radius = 0.30
+
+# --- Positive: posture & energy (keep from standard) ---
+[rewards.posture_stability]
+weight = 1.2
+[rewards.posture_stability.params]
+gravity_std = 0.16
+ang_vel_std = 0.43
+
+[rewards.energy_efficiency]
+weight = 1.2
+[rewards.energy_efficiency.params]
+power_scale = 250.0
+
+[rewards.pareto_aligned]
+weight = 2.5
+[rewards.pareto_aligned.params]
+command_name = "base_velocity"
+forward_threshold = 0.60
+tracking_std = 0.25
+posture_weight = 0.5
+energy_weight = 0.5
+time_weight = 0.0
+gravity_std = 0.16
+ang_vel_std = 0.43
+power_scale = 250.0
+
+# --- Negative: base stability ---
+[rewards.lin_vel_z]
+weight = -0.52
+
+[rewards.ang_vel_xy]
+weight = -0.20
+
+[rewards.ang_acc_xy]
+weight = -0.25
+
+[rewards.flat_orientation]
+weight = -0.6
+
+[rewards.correct_base_height]
+weight = -0.45
+[rewards.correct_base_height.params]
+target_height = 0.38
+
+# --- Negative: joint smoothness ---
+[rewards.joint_acc]
+weight = -7.5e-7
+
+[rewards.joint_torques]
+weight = -1.05e-4
+
+[rewards.dof_pos_limits]
+weight = -0.3
+
+# --- Negative: action smoothness ---
+[rewards.action_rate]
+weight = -0.016
+
+[rewards.action_smoothness]
+weight = -0.011
+
+# --- Negative: undesired contacts ---
+[rewards.undesired_contacts]
+weight = -0.3
+[rewards.undesired_contacts.params]
+threshold = 1
+
+# --- Extra ---
+[rewards.hip_to_default]
+weight = -0.15
+
+[rewards.joint_position_penalty]
+weight = -0.11
+[rewards.joint_position_penalty.params]
+stand_still_scale = 2.0
+cmd_threshold = 0.10
+ang_cmd_threshold = 0.20
+
+[rewards.stand_still_motion]
+weight = -0.85
+[rewards.stand_still_motion.params]
+command_name = "base_velocity"
+lin_cmd_threshold = 0.15
+ang_cmd_threshold = 0.2
+vertical_vel_scale = 0.5
+ang_vel_scale = 0.5
+joint_vel_scale = 0.1
+
+[rewards.commanded_still_penalty]
+weight = -0.19
+[rewards.commanded_still_penalty.params]
+command_name = "base_velocity"
+cmd_threshold = 0.20
+still_speed_threshold = 0.12
+
+# --- Gait quality ---
+[rewards.feet_air_time]
+weight = 0.95
+[rewards.feet_air_time.params]
+command_name = "base_velocity"
+threshold = 0.18
+
+[rewards.feet_slide]
+weight = -0.12
+
+[rewards.feet_stumble]
+weight = -0.04
+
+[rewards.termination]
+weight = -3.5
+
+[rewards.dof_vel]
+weight = -3.9e-4
+
+[rewards.base_lateral_vel]
+weight = -0.7
+
+[rewards.air_time_variance_penalty]
+weight = -0.55
+
+[rewards.pivot_turning]
+weight = -0.2
+[rewards.pivot_turning.params]
+lin_vel_threshold = 0.2
+ang_vel_threshold = 0.5
+
+[rewards.feet_clearance]
+weight = 0.35
+[rewards.feet_clearance.params]
+command_name = "base_velocity"
+target_height = 0.08
+std = 0.05
+terrain_height_scale = 0.60
+max_terrain_extra_height = 0.08
+speed_height_scale = 0.01
+body_y_start = 5
+body_y_end = 11
+near_x_start = 2
+near_x_end = 10
+delta_quantile = 0.85
+
+[rewards.feet_swing_forward]
+weight = 0.12
+[rewards.feet_swing_forward.params]
+command_name = "base_velocity"
+target_forward = 0.10
+std = 0.08
+min_command = 0.10
+
+# --- Energy ---
+[rewards.energy]
+weight = -2.0e-5
+
+
+# =============================================================================
+# Velocity Curriculum Configuration
+# =============================================================================
+[velocity_curriculum]
+promote_threshold = 0.62
+promote_count = 3
+demote_threshold = 0.38
+demote_count = 2
+
+[[velocity_curriculum.stages]]
+# Stage 0 MUST exactly match [commands.ranges]
+lin_vel_x   = [0.0,  0.8]
+lin_vel_y   = [0.0,  0.0]
+ang_vel_yaw = [-1.5, 1.5]
+
+[[velocity_curriculum.stages]]
+lin_vel_x   = [0.0,  1.0]
+lin_vel_y   = [0.0,  0.0]
+ang_vel_yaw = [-1.5, 1.5]
+
+[[velocity_curriculum.stages]]
+lin_vel_x   = [0.0,  1.0]
+lin_vel_y   = [0.0,  0.0]
+ang_vel_yaw = [-1.5, 1.5]
+
+[[velocity_curriculum.stages]]
+lin_vel_x   = [0.0,  1.0]
+lin_vel_y   = [0.0,  0.0]
+ang_vel_yaw = [-1.5, 1.5]
