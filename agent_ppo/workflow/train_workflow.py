@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 ###########################################################################
-# Copyright 漏 1998 - 2026 Tencent. All Rights Reserved.
+# Copyright 1998 - 2026 Tencent. All Rights Reserved.
 ###########################################################################
 """
 Author: Tencent AI Arena Authors
@@ -11,16 +11,16 @@ Author: Tencent AI Arena Authors
 import os
 import time
 from typing import Optional, Tuple
-from agent_ppo.conf.conf import Config
-from agent_ppo.feature.definition import RolloutStorage
+from agent_ppo.conf.conf import WkRuntimeConfig
+from agent_ppo.feature.definition import WkRolloutStorage
 from tools.train_env_conf_validate import check_usr_conf
 from tools.utils import load_reward_keys_from_monitor_config
 import torch
 from collections import deque, defaultdict
 
 
-class VelocityCurriculum:
-    """Performance-based velocity curriculum, mirroring terrain curriculum logic.
+class WkVelocityStageCurriculum:
+    """Performance-based velocity curriculum for command range expansion.
 
     Promotes to next velocity stage when mean reward_track_lin_vel_xy >
     promote_threshold for promote_count consecutive episode-batch checks.
@@ -28,18 +28,20 @@ class VelocityCurriculum:
     demote_count consecutive checks. Neither counter changes when the metric
     stays in the neutral zone [demote_threshold, promote_threshold).
 
-    Completely independent of terrain.curriculum 鈥?terrain difficulty is managed
-    separately (num_rows=10, difficulty_range=[0,1.0]). Stage changes call
-    env.reset(usr_conf) to apply new velocity ranges.
-    Policy weights are NOT affected 鈥?only env command-sampling changes.
+    It is independent of terrain.curriculum. Terrain difficulty is still
+    managed by the simulator configuration, while this helper only changes
+    command sampling ranges by calling env.reset(usr_conf).
 
     Configuration is loaded from usr_conf["velocity_curriculum"] (TOML section
     [velocity_curriculum]), so all thresholds and stage definitions live in the
     TOML file rather than being hard-coded here.
 
-    鎬ц兘椹卞姩鐨勯€熷害璇剧▼锛屽鐢ㄥ湴褰㈣绋嬮€昏緫锛堣〃鐜板ソ鍒欏崌绾э紝宸垯闄嶇骇锛夈€?    涓?terrain.curriculum 瀹屽叏鐙珛鈥斺€斿湴褰㈤毦搴︾敱 TOML [terrain] 鑺傜嫭绔嬬鐞?    锛?0 妗ｏ紝瑕嗙洊瀹屾暣 [0,1] 闅惧害甯︼級銆?    鎵€鏈夐槇鍊煎拰闃舵瀹氫箟鍧囦粠 TOML [velocity_curriculum] 鑺傝鍙栥€?    """
+    The terrain curriculum and the velocity curriculum are intentionally
+    independent. Terrain difficulty is controlled by the simulator config,
+    while this helper only changes command sampling ranges.
+    """
 
-    # Default stages used only when usr_conf has no [velocity_curriculum] section.
+    # Note: Preset stages used only when usr_conf has no [velocity_curriculum] section.
     _DEFAULT_STAGES = [
         {"lin_vel_x": [0.0,  0.5], "lin_vel_y": [-0.3,  0.3], "ang_vel_yaw": [-1.0,  1.0]},
         {"lin_vel_x": [0.0,  1.0], "lin_vel_y": [-0.5,  0.5], "ang_vel_yaw": [-1.5,  1.5]},
@@ -47,8 +49,8 @@ class VelocityCurriculum:
         {"lin_vel_x": [-0.5, 2.0], "lin_vel_y": [-1.0,  1.0], "ang_vel_yaw": [-1.5,  1.5]},
     ]
 
-    # ep_info key used as performance signal.  Different framework versions may
-    # expose reward terms with slightly different names, so lookup is tolerant.
+    # Note: ep_info key used as performance signal.  Different framework versions may
+    # Note: expose return term terms with slightly different names, so lookup is tolerant.
     _TRACKING_KEY = "reward_track_lin_vel_xy"
     _TRACKING_KEY_CANDIDATES = (
         "reward_track_lin_vel_xy",
@@ -61,7 +63,7 @@ class VelocityCurriculum:
         """Build curriculum from usr_conf["velocity_curriculum"] (TOML section).
 
         Falls back to _DEFAULT_STAGES / hard-coded thresholds if the section is absent.
-        浠?TOML 鐨?[velocity_curriculum] 鑺傚姞杞介厤缃紱鑺傜己澶辨椂鍥為€€鍒伴粯璁ゅ€笺€?        """
+        """
         self.logger = logger
         vc_conf = usr_conf.get("velocity_curriculum", {})
         tracking_reward_conf = usr_conf.get("rewards", {}).get("track_lin_vel_xy", {})
@@ -75,10 +77,10 @@ class VelocityCurriculum:
             )
             self._tracking_reward_weight = 1.0
 
-        self.promote_threshold: float = self._normalize_threshold(
+        self.promote_threshold: float = self._wk_normalize_tracking_threshold(
             float(vc_conf.get("promote_threshold", 0.64)), "promote_threshold"
         )
-        self.demote_threshold:  float = self._normalize_threshold(
+        self.demote_threshold:  float = self._wk_normalize_tracking_threshold(
             float(vc_conf.get("demote_threshold", 0.32)), "demote_threshold"
         )
         self.promote_count:     int   = int(vc_conf.get("promote_count", 5))
@@ -114,8 +116,8 @@ class VelocityCurriculum:
             )
 
         self._stage_idx = 0
-        self._promote_streak = 0  # consecutive checks above promote_threshold
-        self._demote_streak = 0   # consecutive checks below demote_threshold
+        self._promote_streak = 0  # Note: consecutive checks above promote_threshold
+        self._demote_streak = 0   # Note: consecutive checks below demote_threshold
         self._last_mean_tracking_reward = 0.0
         self._last_mean_tracking_ratio = 0.0
         self._tracking_key_resolved = None
@@ -128,14 +130,14 @@ class VelocityCurriculum:
             f"promote_count={self.promote_count}, demote_count={self.demote_count}"
         )
 
-    def _normalize_threshold(self, threshold_value: float, field_name: str) -> float:
+    def _wk_normalize_tracking_threshold(self, threshold_value: float, field_name: str) -> float:
         """Normalize legacy absolute thresholds into reward-ratio thresholds.
 
         Historical configs stored absolute weighted reward thresholds (e.g. 1.6).
         That makes curriculum behavior drift every time reward weight changes.
         New configs should store ratios in [0, 1], e.g. 0.55 means 55% of the
         current track_lin_vel_xy maximum reward.
-        鍘嗗彶閰嶇疆浣跨敤鍔犳潈 reward 鐨勭粷瀵归槇鍊硷紙濡?1.6锛夛紝reward weight 涓€鏀瑰氨浼氭紓銆?        鐜板湪缁熶竴杞负姣斾緥闃堝€硷細[0,1] 鍖洪棿锛?.55 琛ㄧず杈惧埌褰撳墠鏈€澶?tracking reward 鐨?55%銆?        """
+        """
         if threshold_value <= 1.0:
             return threshold_value
 
@@ -158,10 +160,8 @@ class VelocityCurriculum:
     def last_tracking_ratio(self) -> float:
         return self._last_mean_tracking_ratio
 
-    def _resolve_tracking_metric(self, ep_info):
-        """Return the tracking metric value and the key used to find it.
-
-        杩斿洖 episode info 涓殑閫熷害杩借釜鎸囨爣鍊硷紝浠ュ強鍛戒腑鐨?key銆?        """
+    def _wk_resolve_tracking_metric_entry(self, ep_info):
+        """Resolve the tracking metric value and the concrete key used to find it."""
         if self._tracking_key_resolved and self._tracking_key_resolved in ep_info:
             return ep_info[self._tracking_key_resolved], self._tracking_key_resolved
 
@@ -178,14 +178,14 @@ class VelocityCurriculum:
 
         return None, None
 
-    def _mean_tracking_reward(self, ep_infos) -> Tuple[Optional[float], Optional[float]]:
+    def _wk_summarize_tracking_reward(self, ep_infos) -> Tuple[Optional[float], Optional[float]]:
         """Average reward_track_lin_vel_xy across completed episodes.
 
-        Returns both the raw weighted reward and the normalized ratio.
-        杩斿洖鍔犳潈鍚庣殑鍘熷 tracking reward锛屼互鍙婄浉瀵瑰綋鍓?reward weight 鐨勫綊涓€鍖栨瘮渚嬨€?        """
+        Returns the weighted reward mean and the normalized reward ratio.
+        """
         values = []
         for ep_info in ep_infos:
-            v, key = self._resolve_tracking_metric(ep_info)
+            v, key = self._wk_resolve_tracking_metric_entry(ep_info)
             if key is None:
                 continue
             values.append(v.float().mean().item() if isinstance(v, torch.Tensor) else float(v))
@@ -204,19 +204,16 @@ class VelocityCurriculum:
         mean_ratio = mean_reward / self._tracking_reward_weight
         return mean_reward, mean_ratio
 
-    def _apply_stage(self, usr_conf, env, obs, critic_obs):
-        """Write current stage ranges into usr_conf and call env.reset.
-        Returns (obs, critic_obs, reset_happened: bool).
-        reset_happened=False on env.reset failure so caller skips stat-tensor zeroing.
-        """
+    def _wk_apply_active_velocity_stage(self, usr_conf, env, obs, critic_obs):
+        """Apply the active velocity stage, reset the env, and return fresh observations."""
         cfg = self.STAGES[self._stage_idx]
         usr_conf["commands"]["ranges"]["lin_vel_x"]   = cfg["lin_vel_x"]
         usr_conf["commands"]["ranges"]["lin_vel_y"]   = cfg["lin_vel_y"]
         usr_conf["commands"]["ranges"]["ang_vel_yaw"] = cfg["ang_vel_yaw"]
         self.logger.info(
-            f"[VelocityCurriculum] 鈫?Stage {self._stage_idx}: "
+            f"[VelocityCurriculum] Stage {self._stage_idx}: "
             f"lin_vel_x={cfg['lin_vel_x']}, lin_vel_y={cfg['lin_vel_y']}, "
-            f"ang_vel_yaw={cfg['ang_vel_yaw']} 鈥?calling env.reset"
+            f"ang_vel_yaw={cfg['ang_vel_yaw']} calling env.reset"
         )
         data = env.reset(usr_conf)
         if data is None:
@@ -227,18 +224,15 @@ class VelocityCurriculum:
             new_critic_obs = new_obs
         return torch.clone(new_obs), torch.clone(new_critic_obs), True
 
-    def check_and_update(self, ep_infos, usr_conf, env, obs, critic_obs, rollout_stats=None):
-        """Check episode-batch performance and promote / demote stage if warranted.
+    def evaluate_and_update_stage(self, ep_infos, usr_conf, env, obs, critic_obs, rollout_stats=None):
+        """Promote or demote the active velocity stage when tracking metrics warrant it.
 
-        Call this BEFORE ep_infos.clear() so the current batch's data is available.
-        Returns (obs, critic_obs, reset_happened: bool).
-        reset_happened=True means env.reset was called; caller should zero
-        cur_reward_sum / cur_episode_length to avoid stale statistics.
-
-        鍦?ep_infos.clear() 鍓嶈皟鐢紝纭繚鑳借鍒板綋鍓嶆壒娆＄殑鏁版嵁銆?        reset_happened=True 鏃惰皟鐢ㄦ柟闇€娓呴浂 cur_reward_sum / cur_episode_length锛?        閬垮厤 env.reset 鍚庢棫绱鍊兼薄鏌?rewbuffer 缁熻銆?        """
+        This must run before ep_infos is cleared so the current rollout still
+        has access to finished-episode reward summaries.
+        """
         self._debug_check_count += 1
         rollout_stats = rollout_stats or {}
-        mean_reward, mean_ratio = self._mean_tracking_reward(ep_infos)
+        mean_reward, mean_ratio = self._wk_summarize_tracking_reward(ep_infos)
         metric_source = "episode"
         if mean_reward is None or mean_ratio is None:
             rollout_reward = rollout_stats.get("rollout_track_lin_vel_xy_reward")
@@ -272,7 +266,7 @@ class VelocityCurriculum:
                 self._stage_idx += 1
                 self._promote_streak = 0
                 self.logger.warning(
-                    f"[VelocityCurriculum] PROMOTE 鈫?stage {self._stage_idx} "
+                    f"[VelocityCurriculum] PROMOTE stage {self._stage_idx} "
                     f"(tracking_ratio={mean_ratio:.3f} >= {self.promote_threshold:.3f}, "
                     f"tracking_reward={mean_reward:.3f}, "
                     f"for {self.promote_count} consecutive checks)"
@@ -285,14 +279,14 @@ class VelocityCurriculum:
                 self._stage_idx -= 1
                 self._demote_streak = 0
                 self.logger.warning(
-                    f"[VelocityCurriculum] DEMOTE 鈫?stage {self._stage_idx} "
+                    f"[VelocityCurriculum] DEMOTE stage {self._stage_idx} "
                     f"(tracking_ratio={mean_ratio:.3f} < {self.demote_threshold:.3f}, "
                     f"tracking_reward={mean_reward:.3f}, "
                     f"for {self.demote_count} consecutive checks)"
                 )
                 stage_changed = True
         else:
-            # Neutral zone: slowly decay both streaks to avoid oscillation
+            # Note: Neutral zone: slowly decay both streaks to prevent oscillation
             self._promote_streak = max(0, self._promote_streak - 1)
             self._demote_streak = max(0, self._demote_streak - 1)
 
@@ -312,21 +306,13 @@ class VelocityCurriculum:
             )
 
         if stage_changed:
-            return self._apply_stage(usr_conf, env, obs, critic_obs)
+            return self._wk_apply_active_velocity_stage(usr_conf, env, obs, critic_obs)
         return obs, critic_obs, False
 
 
-def _initialize_training_state(env, agent, logger):
-    """
-    Initialize training state including storage, buffers, and observations.
-    鍒濆鍖栬缁冪姸鎬侊紝鍖呮嫭瀛樺偍銆佺紦鍐插尯鍜岃娴嬨€?
-    Returns:
-        tuple: (storage, obs, critic_obs, ep_infos, rewbuffer, lenbuffer,
-                cur_reward_sum, cur_episode_length, reward_keys, usr_conf)
-        杩斿洖鍊硷細(storage, obs, critic_obs, ep_infos, rewbuffer, lenbuffer,
-                cur_reward_sum, cur_episode_length, reward_keys, usr_conf)
-    """
-    usr_conf, usr_conf_file, is_eval, stage = Config.load_conf(logger)
+def wk_initialize_training_runtime_state(env, agent, logger):
+    """Initialize rollout storage, episode buffers, and the first observations."""
+    usr_conf, usr_conf_file, is_eval, stage = WkRuntimeConfig.load_conf(logger)
 
     terrain_mode = usr_conf.get("terrain", {}).get("mode", "standard")
     if terrain_mode == "standard":
@@ -347,16 +333,16 @@ def _initialize_training_state(env, agent, logger):
             logger.error(message)
             raise ValueError(message)
 
-    # Validate configuration before proceeding
+    # Note: Validate configuration before proceeding
 
     valid, message = check_usr_conf(usr_conf, is_eval=False, logger=logger)
     if not valid:
         logger.error(message)
         raise Exception(message)
 
-    # Set model to training mode
+    # Note: Set model to training mode
 
-    # Initialize buffers and statistics
+    # Note: Initialize buffers and statistics
     agent.algorithm.actor_critic.train()
     ep_infos = []
     rewbuffer = deque(maxlen=100)
@@ -364,11 +350,10 @@ def _initialize_training_state(env, agent, logger):
     cur_reward_sum = torch.zeros(agent.num_envs, dtype=torch.float, device=agent.device)
     cur_episode_length = torch.zeros(agent.num_envs, dtype=torch.float, device=agent.device)
 
-    # Use algorithm's internal storage (same object used by learn())
-    # 浣跨敤绠楁硶鍐呴儴鐨?storage锛堜笌 learn() 浣跨敤鍚屼竴涓璞★級
+    # Note: The workflow and the PPO learner operate on the same storage object.
     storage = agent.algorithm.storage
 
-    # Reset environment and get initial observations
+    # Note: Clear environment and get initial observations
     data = env.reset(usr_conf)
     if data is None:
         error_message = "reset failed, please check"
@@ -382,8 +367,7 @@ def _initialize_training_state(env, agent, logger):
     critic_obs = torch.clone(critic_obs)
     logger.info(f"obs.shape:{obs.shape}, critic_obs.shape:{critic_obs.shape}")
 
-    # Load reward keys from monitor config
-    # 浠?monitor 閰嶇疆鍔犺浇 reward_keys
+    # Note: Monitor keys are loaded once so the reporting path stays lightweight.
     reward_keys = load_reward_keys_from_monitor_config()
     logger.info(f"reward_keys list is {reward_keys}")
 
@@ -402,13 +386,11 @@ def _initialize_training_state(env, agent, logger):
 
 
 def workflow(envs, agents, logger=None, monitor=None, *args, **kwargs):
-    """
-    Main training workflow.
-    涓昏缁冨伐浣滄祦銆?    """
+    """Main PPO rollout/update loop used by the framework workflow loader."""
     agent = agents[0]
     env = envs[0]
 
-    # Initialize training state
+    # Note: Initialize training state
     (
         storage,
         obs,
@@ -420,21 +402,17 @@ def workflow(envs, agents, logger=None, monitor=None, *args, **kwargs):
         cur_episode_length,
         reward_keys,
         usr_conf,
-    ) = _initialize_training_state(env, agent, logger)
+    ) = wk_initialize_training_runtime_state(env, agent, logger)
 
     last_obs, last_critic_obs = torch.clone(obs), torch.clone(critic_obs)
     last_report_monitor_time = 0
     episode = 0
 
-    # Velocity curriculum: expands command ranges independently of terrain curriculum.
-    # terrain difficulty spans the full [0, 1.0] band via difficulty_range in TOML,
-    # with 10 curriculum rows and initial placement capped at level 0;
-    # velocity stages expand independently via VelocityCurriculum.
-    # 閫熷害璇剧▼锛氱嫭绔嬩簬鍦板舰璇剧▼鎵╁ぇ閫熷害鎸囦护鑼冨洿銆?    # 鍦板舰闅惧害鐢?TOML difficulty_range=[0,1.0] + 10 涓绋嬫。浣嶇嫭绔嬮檺鍒讹紝
-    # 鍒濆鏀剧疆绛夌骇涓婇檺涓?0锛涢€熷害鑼冨洿鐢?VelocityCurriculum 閫愰樁鎵╁ぇ銆?
+    # Note: Speed command expansion is separate from terrain progression so we can
+    # Note: tune speed difficulty without changing the terrain schedule.
     vel_curriculum = None
     if "velocity_curriculum" in usr_conf:
-        vel_curriculum = VelocityCurriculum(logger, usr_conf)
+        vel_curriculum = WkVelocityStageCurriculum(logger, usr_conf)
 
     nav_controller = None
     nav_conf = usr_conf.get("navigation", {})
@@ -444,13 +422,13 @@ def workflow(envs, agents, logger=None, monitor=None, *args, **kwargs):
             "uses pure-RL maze navigation. No local planner will override commands."
         )
 
-    # Main Training Loop
+    # Note: Main Training Loop
     while True:
         logger.info(f"Episode {episode} start, usr_conf is {usr_conf}")
         start_time = time.time()
 
-        # Phase 1: Data Collection
-        last_obs, last_critic_obs, storage_stats = run_episodes_(
+        # Note: Phase 1: Data Collection
+        last_obs, last_critic_obs, storage_stats = wk_collect_rollout_batch(
             env,
             agent,
             storage,
@@ -469,36 +447,32 @@ def workflow(envs, agents, logger=None, monitor=None, *args, **kwargs):
 
         episode += 1
 
-        # Phase 1.5: Velocity Curriculum Check (performance-based, before ep_infos.clear)
-        # 闃舵1.5锛氶€熷害璇剧▼妫€鏌ワ紙鎬ц兘椹卞姩锛屽繀椤诲湪 ep_infos.clear() 涔嬪墠璋冪敤锛?
+        # Note: Check speed curriculum before ep_infos is cleared for the next rollout.
         vel_reset = False
         if vel_curriculum is not None:
-            last_obs, last_critic_obs, vel_reset = vel_curriculum.check_and_update(
+            last_obs, last_critic_obs, vel_reset = vel_curriculum.evaluate_and_update_stage(
                 ep_infos, usr_conf, env, last_obs, last_critic_obs, rollout_stats=storage_stats
             )
-        # If env.reset was triggered by a stage change, stale accumulated rewards
-        # from interrupted episodes must be discarded to prevent corrupting rewbuffer.
+        # Note: If env.clear was triggered by a stage change, stale accumulated rewards
+        # Note: from interrupted episodes must be discarded to prevent corrupting rewbuffer.
         if vel_reset:
             cur_reward_sum.zero_()
             cur_episode_length.zero_()
             if nav_controller is not None:
                 nav_controller.reset(agent.num_envs, agent.device)
 
-        # Phase 2: Policy Update
-        # 闃舵2锛氱瓥鐣ユ洿鏂?        # framework=True lets the framework directly call back to the business layer,
-        # skipping the sample data guard.
-        # framework=True 璁╂鏋跺眰鐩存帴鍥炶皟涓氬姟灞傦紝璺宠繃 sample data guard
+        # Note: framework=True allows the business workflow to trigger the learner
+        # Note: directly without passing an external sample batch.
         agent.learn(list_sample_data=None)
-        # Reset buffer pointer for next data collection
-        # 閲嶇疆 buffer 鎸囬拡锛屼负涓嬩竴杞暟鎹敹闆嗗仛鍑嗗
+        # Note: Clear rollout storage after the learner has consumed the present batch.
         storage.clear()
         total_cost_time = round(time.time() - start_time, 2)
         logger.info(f"Episode {episode} end, cost_time is {total_cost_time} s")
 
-        # Phase 3: Monitoring Metrics Processing
+        # Note: Phase 3: Monitoring Metrics Processing
         now = time.time()
         if now - last_report_monitor_time >= 60:
-            report_monitor_data(ep_infos, reward_keys, agent, monitor, episode, storage_stats,
+            wk_report_training_monitor_snapshot(ep_infos, reward_keys, agent, monitor, episode, storage_stats,
                                 vel_stage=vel_curriculum.stage if vel_curriculum is not None else 0,
                                 vel_tracking_ratio=vel_curriculum.last_tracking_ratio if vel_curriculum is not None else 0.0,
                                 vel_tracking_reward=vel_curriculum.last_tracking_reward if vel_curriculum is not None else 0.0,
@@ -507,17 +481,15 @@ def workflow(envs, agents, logger=None, monitor=None, *args, **kwargs):
 
         ep_infos.clear()
 
-        # Phase 4: Model Saving
+        # Note: Phase 4: Model Saving
         if episode % agent.save_interval == 0:
             agent.save_model()
 
     env.close()
 
 
-def _extract_metric_value(ep_info, key, device):
-    """Extract and convert metric value to tensor.
-
-    鎻愬彇鎸囨爣鍊煎苟杞崲涓?tensor銆?    """
+def wk_extract_episode_metric_mean(ep_info, key, device):
+    """Extract one episode metric and convert it into a scalar tensor mean."""
     if key not in ep_info:
         return torch.tensor(0.0, device=device, dtype=torch.float32)
     metric = ep_info[key]
@@ -526,37 +498,36 @@ def _extract_metric_value(ep_info, key, device):
     return metric.float().mean()
 
 
-def _aggregate_metrics(generic_metrics):
-    """Aggregate metrics by computing mean values.
-
-    閫氳繃璁＄畻鍧囧€兼眹鎬绘寚鏍囥€?    """
-    aggregated = {}
-    for metric_key, values in generic_metrics.items():
+def wk_average_metric_history_by_name(metric_history_by_name):
+    """Reduce a metric-history dictionary into scalar means keyed by metric name."""
+    aggregated_metrics = {}
+    for metric_key, values in metric_history_by_name.items():
         if values:
-            aggregated[metric_key] = torch.stack(values).mean().item()
+            aggregated_metrics[metric_key] = torch.stack(values).mean().item()
         else:
-            aggregated[metric_key] = 0.0
-    return aggregated
+            aggregated_metrics[metric_key] = 0.0
+    return aggregated_metrics
 
 
-def _collect_episode_metrics(ep_infos, reward_keys, device):
-    """Collect metrics from episode infos.
-
-    浠?episode info 涓敹闆嗘寚鏍囥€?    """
-    generic_metrics = defaultdict(list)
+def wk_collect_episode_metric_means(ep_infos, reward_keys, device):
+    """Collect the mean value for each requested metric across finished episodes."""
+    metric_history_by_name = defaultdict(list)
     for ep_info in ep_infos:
         for key in reward_keys:
-            metric_value = _extract_metric_value(ep_info, key, device)
-            generic_metrics[key].append(metric_value)
-    return _aggregate_metrics(generic_metrics)
+            metric_value = wk_extract_episode_metric_mean(ep_info, key, device)
+            metric_history_by_name[key].append(metric_value)
+    return wk_average_metric_history_by_name(metric_history_by_name)
 
 
-def report_monitor_data(ep_infos, reward_keys, agent, monitor, episode, storage_stats=None,
+def wk_report_training_monitor_snapshot(ep_infos, reward_keys, agent, monitor, episode, storage_stats=None,
                         vel_stage: int = 0, vel_tracking_ratio: float = 0.0,
                         vel_tracking_reward: float = 0.0, lenbuffer=None, rewbuffer=None):
+    """Push reward, curriculum, and rollout summaries to the monitor process.
+
+    The monitor receives a mix of per-episode metrics, rollout-level summaries,
+    and live physics snapshots. Keeping the merge logic in one place avoids
+    accidentally overwriting richer workflow metrics with missing episode keys.
     """
-    Report monitoring data to monitor system.
-    涓婃姤鐩戞帶鏁版嵁鍒扮洃鎺х郴缁熴€?    """
     monitor_data = {
         "episode_cnt": episode,
         "vel_curriculum_stage": vel_stage,
@@ -564,23 +535,23 @@ def report_monitor_data(ep_infos, reward_keys, agent, monitor, episode, storage_
         "vel_curriculum_tracking_reward": vel_tracking_reward,
     }
 
-    # Merge all storage stats: reward_mean/reward_std AND physics obs_ keys.
+    # Note: Merge all storage stats: reward_mean/reward_std AND physics obs_ keys.
     if storage_stats:
         monitor_data.update(storage_stats)
 
-    # Episode health metrics: episode length and cumulative reward per episode.
+    # Note: Episode health metrics: episode length and cumulative return term per episode.
     if lenbuffer:
         monitor_data["mean_episode_length"] = float(sum(lenbuffer) / len(lenbuffer))
     if rewbuffer:
         monitor_data["mean_episode_reward"] = float(sum(rewbuffer) / len(rewbuffer))
 
     if ep_infos:
-        metrics = _collect_episode_metrics(ep_infos, reward_keys, agent.device)
-        # Do not let episode-level missing keys overwrite workflow-level metrics.
-        # monitor_builder exposes non-episode metrics such as vel_curriculum_* and
-        # obs_*; _collect_episode_metrics returns 0 for keys absent from ep_info.
-        # If blindly updated, those valid workflow/storage values become flat 0
-        # on the dashboard.
+        metrics = wk_collect_episode_metric_means(ep_infos, reward_keys, agent.device)
+        # Note: Do not let episode-level missing keys overwrite workflow-level metrics.
+        # Note: monitor_builder exposes non-episode metrics such as vel_curriculum_* and
+        # Note: obs_*; _collect_episode_metrics returns 0 for keys absent from ep_info.
+        # Note: If blindly updated, those valid workflow/storage values become flat 0
+        # Note: on the dashboard.
         for key, value in metrics.items():
             if key not in monitor_data:
                 monitor_data[key] = value
@@ -600,10 +571,8 @@ def report_monitor_data(ep_infos, reward_keys, agent, monitor, episode, storage_
     monitor.put_data({os.getpid(): monitor_data})
 
 
-def _process_env_step_result(data, episode, logger):
-    """
-    Process environment step result.
-    澶勭悊鐜浜や簰缁撴灉銆?    """
+def wk_unpack_env_step_result(data, episode, logger):
+    """Normalize the framework-specific env.step payload into rollout tensors."""
     if data is None:
         error_message = "step failed, please check"
         logger.error(error_message)
@@ -650,10 +619,8 @@ def _process_env_step_result(data, episode, logger):
     return frame_no, obs, critic_obs, rewards, dones, infos
 
 
-def _move_tensors_to_device(obs, critic_obs, rewards, dones, device):
-    """Move tensors to specified device.
-
-    灏嗗紶閲忕Щ鍔ㄥ埌鎸囧畾璁惧銆?    """
+def wk_move_step_tensors_to_device(obs, critic_obs, rewards, dones, device):
+    """Move the step outputs onto the learner device before storage writes."""
     return (
         obs.to(device),
         critic_obs.to(device),
@@ -662,7 +629,7 @@ def _move_tensors_to_device(obs, critic_obs, rewards, dones, device):
     )
 
 
-def _update_transition_data(
+def wk_populate_rollout_transition(
     transition,
     actions,
     values,
@@ -678,9 +645,7 @@ def _update_transition_data(
     hidden_states=None,
     timeout_bootstrap_values=None,
 ):
-    """
-    Update transition with step data.
-    浣跨敤姝ラ鏁版嵁鏇存柊 transition銆?    """
+    """Populate one rollout transition record from the current step outputs."""
     transition.actions = actions
     transition.values = values
     transition.actions_log_prob = actions_log_prob
@@ -692,8 +657,8 @@ def _update_transition_data(
     transition.dones = dones
     transition.hidden_states = hidden_states
 
-    # Bootstrapping on time outs
-    # 澶勭悊 timeouts
+    # Note: Bootstrapping on time outs
+    # Note: timeouts
     if "time_outs" in infos:
         bootstrap_values = (
             timeout_bootstrap_values
@@ -711,7 +676,7 @@ def _update_transition_data(
         )
 
 
-def _update_episode_statistics(
+def wk_refresh_completed_episode_buffers(
     dones,
     rewards,
     infos,
@@ -721,9 +686,7 @@ def _update_episode_statistics(
     lenbuffer,
     ep_infos,
 ):
-    """Update episode statistics and buffers.
-
-    鏇存柊 episode 缁熻鍜岀紦鍐插尯銆?    """
+    """Update rolling episode reward/length buffers and reset finished env slots."""
     if "episode" in infos:
         ep_infos.append(infos["episode"])
 
@@ -738,7 +701,7 @@ def _update_episode_statistics(
     cur_episode_length[new_ids] = 0
 
 
-def _compute_advantages_and_returns(
+def wk_finalize_rollout_returns_and_statistics(
     storage,
     agent,
     obs,
@@ -748,13 +711,11 @@ def _compute_advantages_and_returns(
     nav_controller=None,
     usr_conf=None,
 ):
-    """
-    Compute advantage function and returns.
-    璁＄畻浼樺娍鍑芥暟鍜屽洖鎶ャ€?    """
+    """Compute final values, GAE returns, and coarse rollout summary statistics."""
     last_obs = obs
     last_critic_obs = critic_obs
     if nav_controller is not None and last_obs is not None:
-        last_obs, last_critic_obs, _ = _apply_navigation_command(
+        last_obs, last_critic_obs, _ = wk_apply_navigation_controller_command(
             last_obs,
             last_critic_obs,
             env,
@@ -764,7 +725,7 @@ def _compute_advantages_and_returns(
             update_env_command=False,
         )
     if usr_conf is not None and last_obs is not None:
-        last_obs, last_critic_obs, _ = _apply_rl_phase_command(
+        last_obs, last_critic_obs, _ = wk_apply_phase_conditioned_command(
             last_obs,
             last_critic_obs,
             env,
@@ -786,7 +747,7 @@ def _compute_advantages_and_returns(
     return storage_stats
 
 
-def _sample_rollout_tracking_stats(storage, usr_conf, logger=None):
+def wk_estimate_rollout_tracking_metrics(storage, usr_conf, logger=None):
     """Estimate velocity-tracking curriculum metrics from rollout critic obs.
 
     This avoids waiting for completed episodes.  With long stable episodes,
@@ -828,13 +789,13 @@ def _sample_rollout_tracking_stats(storage, usr_conf, logger=None):
     }
 
 
-def _get_isaac_env(env):
+def wk_resolve_wrapped_isaac_env(env):
     """Try to unwrap the KaiwuDRL env wrapper to the underlying Isaac Lab env.
 
-    灏濊瘯瑙ｅ寘 KaiwuDRL 鍖呰灞傦紝鑾峰彇搴曞眰鐨?Isaac Lab 鐜瀵硅薄銆?    Returns the first object that exposes a `command_manager` attribute,
-    or None if none is found.
-    杩斿洖绗竴涓甫鏈?command_manager 灞炴€х殑瀵硅薄锛屾壘涓嶅埌鍒欒繑鍥?None銆?    """
-    # Walk common wrapper chains recursively instead of assuming one fixed depth.
+    Returns the first object that exposes both `command_manager` and `scene`,
+    or None if no such object can be found through the wrapper chain.
+    """
+    # Note: Walk common wrapper chains recursively instead of assuming one fixed depth.
     seen_ids = set()
     pending = [env]
     while pending:
@@ -862,7 +823,7 @@ def _get_isaac_env(env):
     return None
 
 
-def _has_robot_state(asset) -> bool:
+def wk_has_robot_state(asset) -> bool:
     data = getattr(asset, "data", None)
     return (
         data is not None
@@ -872,10 +833,12 @@ def _has_robot_state(asset) -> bool:
     )
 
 
-def _get_robot_asset_from_env(isaac_env):
+def wk_find_robot_asset_in_scene(isaac_env):
     """Best-effort robot asset lookup across common Isaac Lab scene layouts.
 
-    濂栧姳妯″潡閫氳繃骞冲彴鍩虹被闂存帴鍙?robot asset锛岃繖閲屾棤娉曞鐢ㄩ棴婧?helper锛?    鍥犳鏀逛负閬嶅巻甯歌 scene 瀹瑰櫒甯冨眬鍋氱ǔ鍋ユ煡鎵俱€?    """
+    The lookup intentionally checks several common container names so the
+    monitor path survives small scene-layout differences between env wrappers.
+    """
     if isaac_env is None:
         return None
 
@@ -896,7 +859,7 @@ def _get_robot_asset_from_env(isaac_env):
                 asset = scene[key]
             except Exception:
                 asset = None
-            if _has_robot_state(asset):
+            if wk_has_robot_state(asset):
                 return asset
 
     for container_name in (
@@ -914,25 +877,25 @@ def _get_robot_asset_from_env(isaac_env):
         if hasattr(container, "get"):
             for key in ("robot", "Robot", "go2", "Go2", "unitree_go2", "UnitreeGo2"):
                 asset = container.get(key)
-                if _has_robot_state(asset):
+                if wk_has_robot_state(asset):
                     return asset
 
         values = getattr(container, "values", None)
         if callable(values):
             for asset in values():
-                if _has_robot_state(asset):
+                if wk_has_robot_state(asset):
                     return asset
 
     for attr_name in ("robot", "_robot"):
         asset = getattr(isaac_env, attr_name, None)
-        if _has_robot_state(asset):
+        if wk_has_robot_state(asset):
             return asset
 
     return None
 
 
-def _sample_physics_stats_from_critic_obs(critic_obs):
-    """Fallback physics metrics from critic observation layout.
+def wk_estimate_physics_metrics_from_critic_obs(critic_obs):
+    """Fallback physics metrics derived purely from critic observation layout.
 
     critic_obs layout is:
       [0:3] base_lin_vel, [3:6] base_ang_vel, [9:12] velocity command.
@@ -965,21 +928,14 @@ def _sample_physics_stats_from_critic_obs(critic_obs):
     }
 
 
-def _sample_physics_stats(env, logger=None, critic_obs=None):
+def wk_sample_runtime_physics_metrics(env, logger=None, critic_obs=None):
     """Take a point-in-time snapshot of key physical quantities across all envs.
 
-    鍦ㄦ墍鏈夊苟琛岀幆澧冧笂瀵瑰叧閿墿鐞嗛噺鍋氫竴娆″揩鐓э紙鍧囧€硷級銆?    杩欎簺鎸囨爣涓?reward 鏉冮噸鏃犲叧锛屾槸鍒ゆ柇绛栫暐鐪熷疄鏀舵暃鎯呭喌鐨勭涓€鎵嬩緷鎹細
-      obs_lin_vel_x_error 鈥?鍓嶅悜閫熷害杩借釜璇樊 |cmd_vx - actual_vx| (m/s)
-      obs_lin_vel_y_error 鈥?渚у悜閫熷害杩借釜璇樊 |cmd_vy - actual_vy| (m/s)
-      obs_actual_vel_x    鈥?鏈轰綋鍓嶅悜瀹為檯閫熷害鍧囧€?(m/s)
-      obs_base_height     鈥?鏈鸿韩楂樺害鍧囧€?(m)锛岀洰鏍?0.38 m
-      obs_ang_vel_xy      鈥?pitch/roll 瑙掗€熷害骞呭€煎潎鍊?(rad/s)
-
-    Falls back to critic_obs for metrics that are available there if the
-    underlying Isaac Lab env is not accessible.
-    濡傛灉璁块棶涓嶅埌搴曞眰 Isaac Lab 鐜锛屽垯浠?critic_obs 涓厹搴曡绠楀彲鐢ㄦ寚鏍囥€?    """
+    Falls back to critic_obs-derived metrics when the underlying Isaac Lab
+    env cannot be unwrapped from the framework wrapper chain.
+    """
     try:
-        isaac_env = _get_isaac_env(env)
+        isaac_env = wk_resolve_wrapped_isaac_env(env)
         if isaac_env is None:
             if logger is not None and not getattr(env, "_physics_stats_error_logged", False):
                 env._physics_stats_error_logged = True
@@ -987,10 +943,10 @@ def _sample_physics_stats(env, logger=None, critic_obs=None):
                     "[PhysicsStats] Failed to unwrap Isaac Lab env; "
                     "falling back to critic_obs for partial physics metrics."
                 )
-            return _sample_physics_stats_from_critic_obs(critic_obs)
+            return wk_estimate_physics_metrics_from_critic_obs(critic_obs)
 
-        cmd = isaac_env.command_manager.get_command("base_velocity")  # (N, 3)
-        asset = _get_robot_asset_from_env(isaac_env)
+        cmd = isaac_env.command_manager.get_command("base_velocity")  # Note: (N, 3)
+        asset = wk_find_robot_asset_in_scene(isaac_env)
         if asset is None:
             if logger is not None and not getattr(env, "_physics_stats_error_logged", False):
                 env._physics_stats_error_logged = True
@@ -998,7 +954,7 @@ def _sample_physics_stats(env, logger=None, critic_obs=None):
                     "[PhysicsStats] Failed to locate robot asset in scene; "
                     "falling back to critic_obs for partial physics metrics."
                 )
-            return _sample_physics_stats_from_critic_obs(critic_obs)
+            return wk_estimate_physics_metrics_from_critic_obs(critic_obs)
 
         actual_vx = asset.data.root_lin_vel_b[:, 0]
         actual_vy = asset.data.root_lin_vel_b[:, 1]
@@ -1029,12 +985,12 @@ def _sample_physics_stats(env, logger=None, critic_obs=None):
                 f"[PhysicsStats] Failed to sample physics metrics from Isaac env: {exc}; "
                 "falling back to critic_obs for partial physics metrics."
             )
-        return _sample_physics_stats_from_critic_obs(critic_obs)
+        return wk_estimate_physics_metrics_from_critic_obs(critic_obs)
 
 
-def _set_env_base_velocity_command(env, command, logger=None):
+def wk_override_env_base_velocity_command(env, command, logger=None):
     """Best-effort override of Isaac Lab's sampled base_velocity command."""
-    isaac_env = _get_isaac_env(env)
+    isaac_env = wk_resolve_wrapped_isaac_env(env)
     if isaac_env is None or not hasattr(isaac_env, "command_manager"):
         if logger is not None and not getattr(env, "_nav_command_error_logged", False):
             env._nav_command_error_logged = True
@@ -1060,13 +1016,13 @@ def _set_env_base_velocity_command(env, command, logger=None):
         return False
 
 
-def _range_midpoint(range_values, default_value: float) -> float:
+def wk_compute_uniform_range_midpoint(range_values, default_value: float) -> float:
     if not isinstance(range_values, (list, tuple)) or len(range_values) != 2:
         return default_value
     return 0.5 * (float(range_values[0]) + float(range_values[1]))
 
 
-def _sample_uniform_range(range_values, shape, device, dtype):
+def wk_sample_uniform_range_values(range_values, shape, device, dtype):
     low = float(range_values[0])
     high = float(range_values[1])
     if high < low:
@@ -1076,8 +1032,8 @@ def _sample_uniform_range(range_values, shape, device, dtype):
     return low + (high - low) * torch.rand(shape, device=device, dtype=dtype)
 
 
-def _estimate_maze_phase_from_obs(obs, usr_conf):
-    """Best-effort track phase estimate from goal distance in policy obs.
+def wk_infer_maze_phase_mask_from_obs(obs, usr_conf):
+    """Infer the maze-phase boolean mask from goal-distance features in policy obs.
 
     Track navigation appends goal features at obs[301:304]:
       local goal x/y normalized by 10m, and goal distance normalized by 20m.
@@ -1097,7 +1053,7 @@ def _estimate_maze_phase_from_obs(obs, usr_conf):
     return goal_dist < goal_dist_gate
 
 
-def _height_grid_from_obs(obs, usr_conf):
+def wk_reshape_height_scan_from_obs(obs, usr_conf):
     if obs is None or not hasattr(obs, "shape"):
         return None
     rl_nav_conf = usr_conf.get("rl_navigation", {})
@@ -1111,9 +1067,9 @@ def _height_grid_from_obs(obs, usr_conf):
     return obs[:, scan_start:scan_start + scan_size].view(obs.shape[0], side, side)
 
 
-def _estimate_pre_maze_terrain_from_obs(obs, usr_conf):
-    """Classify non-maze front terrain into flat / slope / stairs from height scan."""
-    grid = _height_grid_from_obs(obs, usr_conf)
+def wk_infer_pre_maze_terrain_type_from_obs(obs, usr_conf):
+    """Classify non-maze terrain into flat, slope, or stairs from the height scan."""
+    grid = wk_reshape_height_scan_from_obs(obs, usr_conf)
     if grid is None:
         return None
 
@@ -1162,53 +1118,21 @@ def _estimate_pre_maze_terrain_from_obs(obs, usr_conf):
     return terrain_id
 
 
-def _maze_wall_anticipation_from_obs(obs, usr_conf):
-    grid = _height_grid_from_obs(obs, usr_conf)
-    if grid is None:
-        return None, None
-
-    rl_nav_conf = usr_conf.get("rl_navigation", {})
-    obstacle_threshold = float(rl_nav_conf.get("maze_anticipate_obstacle_threshold", -0.72))
-    temperature = max(float(rl_nav_conf.get("maze_anticipate_temperature", 0.18)), 1e-6)
-    front_cols = max(1, min(int(rl_nav_conf.get("maze_anticipate_front_cols", 8)), grid.shape[2]))
-    body_y_start = max(0, int(rl_nav_conf.get("maze_anticipate_body_y_start", 3)))
-    body_y_end = min(int(rl_nav_conf.get("maze_anticipate_body_y_end", 13)), grid.shape[1])
-    side_width = max(1, min(int(rl_nav_conf.get("maze_anticipate_side_width", 4)), grid.shape[1] // 2))
-    if body_y_end <= body_y_start:
-        return None, None
-
-    wall_prob = torch.sigmoid((obstacle_threshold - grid[:, :, :front_cols]) / temperature)
-    center_wall = wall_prob[:, body_y_start:body_y_end, :].mean(dim=(1, 2))
-    left_open = 1.0 - wall_prob[:, :side_width, :].mean(dim=(1, 2))
-    right_open = 1.0 - wall_prob[:, -side_width:, :].mean(dim=(1, 2))
-    open_delta = right_open - left_open
-    turn_sign = torch.sign(open_delta)
-    goal_start = int(rl_nav_conf.get("goal_start", 301))
-    if obs.shape[-1] > goal_start + 1:
-        goal_turn = torch.sign(obs[:, goal_start + 1])
-        turn_sign = torch.where(torch.abs(open_delta) > 0.06, turn_sign, goal_turn)
-
-    wall_start = float(rl_nav_conf.get("maze_anticipate_wall_start", 0.20))
-    wall_full = float(rl_nav_conf.get("maze_anticipate_wall_full", 0.72))
-    wall_gate = torch.clamp((center_wall - wall_start) / max(wall_full - wall_start, 1e-6), 0.0, 1.0)
-    return wall_gate, turn_sign
-
-
-def _phase_command_midpoint(obs, maze_phase, usr_conf, dtype):
+def wk_build_phase_command_fallback(obs, maze_phase, usr_conf, dtype):
     rl_nav_conf = usr_conf.get("rl_navigation", {})
     pre_range = rl_nav_conf.get("pre_maze_lin_vel_x", [0.75, 1.0])
     slope_range = rl_nav_conf.get("slope_lin_vel_x", pre_range)
     stairs_range = rl_nav_conf.get("stairs_lin_vel_x", pre_range)
     maze_range = rl_nav_conf.get("maze_lin_vel_x", [0.45, 0.65])
     terrain_phase_speed_enabled = bool(rl_nav_conf.get("terrain_phase_speed_enabled", False))
-    pre_vx = _range_midpoint(pre_range, 0.875)
-    slope_vx = _range_midpoint(slope_range, pre_vx)
-    stairs_vx = _range_midpoint(stairs_range, pre_vx)
-    maze_vx = _range_midpoint(maze_range, 0.55)
+    pre_vx = wk_compute_uniform_range_midpoint(pre_range, 0.875)
+    slope_vx = wk_compute_uniform_range_midpoint(slope_range, pre_vx)
+    stairs_vx = wk_compute_uniform_range_midpoint(stairs_range, pre_vx)
+    maze_vx = wk_compute_uniform_range_midpoint(maze_range, 0.55)
     command = torch.zeros(maze_phase.shape[0], 3, device=maze_phase.device, dtype=dtype)
     pre_command = torch.full_like(command[:, 0], pre_vx)
     if terrain_phase_speed_enabled and obs is not None:
-        terrain_id = _estimate_pre_maze_terrain_from_obs(obs, usr_conf)
+        terrain_id = wk_infer_pre_maze_terrain_type_from_obs(obs, usr_conf)
         if terrain_id is not None:
             pre_command = torch.where(
                 terrain_id == 1,
@@ -1220,17 +1144,11 @@ def _phase_command_midpoint(obs, maze_phase, usr_conf, dtype):
                 torch.full_like(pre_command, stairs_vx),
                 pre_command,
             )
-    maze_command = torch.full_like(command[:, 0], maze_vx)
-    wall_gate, _ = _maze_wall_anticipation_from_obs(obs, usr_conf)
-    if wall_gate is not None:
-        min_scale = float(rl_nav_conf.get("maze_anticipate_min_speed_scale", 1.0))
-        speed_scale = 1.0 - torch.clamp(wall_gate, 0.0, 1.0) * (1.0 - min_scale)
-        maze_command = maze_command * speed_scale
-    command[:, 0] = torch.where(maze_phase, maze_command, pre_command)
+    command[:, 0] = torch.where(maze_phase, torch.full_like(command[:, 0], maze_vx), pre_command)
     return command
 
 
-def _get_phase_command_state(env, num_envs, device, dtype):
+def wk_get_or_create_phase_command_state(env, num_envs, device, dtype):
     state = getattr(env, "_rl_phase_command_state", None)
     if (
         state is None
@@ -1248,7 +1166,7 @@ def _get_phase_command_state(env, num_envs, device, dtype):
     return state
 
 
-def _reset_phase_command_state(env, dones):
+def wk_reset_finished_phase_command_state(env, dones):
     state = getattr(env, "_rl_phase_command_state", None)
     if state is None or dones is None:
         return
@@ -1261,7 +1179,7 @@ def _reset_phase_command_state(env, dones):
             state["terrain_id"][done_mask] = 0
 
 
-def _apply_rl_phase_command(
+def wk_apply_phase_conditioned_command(
     obs,
     critic_obs,
     env,
@@ -1270,7 +1188,7 @@ def _apply_rl_phase_command(
     update_state=True,
     update_env_command=True,
 ):
-    """Override the locomotion anchor speed before/after the maze phase.
+    """Override the locomotion command anchor before and after the maze phase.
 
     This is intentionally separate from the rule-based navigation controller:
     it changes only the velocity command observation/reward anchor while the
@@ -1280,60 +1198,42 @@ def _apply_rl_phase_command(
     if not bool(rl_nav_conf.get("phase_command_enabled", False)):
         return obs, critic_obs, {}
 
-    maze_phase = _estimate_maze_phase_from_obs(obs, usr_conf)
+    maze_phase = wk_infer_maze_phase_mask_from_obs(obs, usr_conf)
     if maze_phase is None:
         return obs, critic_obs, {}
 
-    state = _get_phase_command_state(env, obs.shape[0], obs.device, obs.dtype)
+    state = wk_get_or_create_phase_command_state(env, obs.shape[0], obs.device, obs.dtype)
     resample_steps = max(int(rl_nav_conf.get("phase_command_resample_steps", 96)), 1)
     pre_range = rl_nav_conf.get("pre_maze_lin_vel_x", [0.75, 1.0])
     slope_range = rl_nav_conf.get("slope_lin_vel_x", pre_range)
     stairs_range = rl_nav_conf.get("stairs_lin_vel_x", pre_range)
     maze_range = rl_nav_conf.get("maze_lin_vel_x", [0.45, 0.65])
     terrain_phase_speed_enabled = bool(rl_nav_conf.get("terrain_phase_speed_enabled", False))
-    terrain_id = _estimate_pre_maze_terrain_from_obs(obs, usr_conf)
+    terrain_id = wk_infer_pre_maze_terrain_type_from_obs(obs, usr_conf)
     if terrain_id is None:
         terrain_id = torch.zeros(obs.shape[0], dtype=torch.long, device=obs.device)
 
     command = state["command"]
     if update_state:
         timer = torch.clamp(state["timer"] - 1, min=0)
-        wall_gate, turn_sign = _maze_wall_anticipation_from_obs(obs, usr_conf)
-        wall_active = torch.zeros(obs.shape[0], dtype=torch.bool, device=obs.device)
-        if wall_gate is not None:
-            wall_active = maze_phase & (wall_gate > 0.05)
         phase_changed = maze_phase != state["maze_phase"]
         terrain_changed = terrain_phase_speed_enabled & (~maze_phase) & (terrain_id != state["terrain_id"])
-        yaw_cleanup = (~wall_active) & (torch.abs(command[:, 2]) > 1e-4)
         needs_sample = (timer <= 0) | phase_changed | terrain_changed | (command[:, 0] <= 0.0)
 
         if needs_sample.any():
-            sampled_pre = _sample_uniform_range(pre_range, (obs.shape[0],), obs.device, obs.dtype)
-            sampled_slope = _sample_uniform_range(slope_range, (obs.shape[0],), obs.device, obs.dtype)
-            sampled_stairs = _sample_uniform_range(stairs_range, (obs.shape[0],), obs.device, obs.dtype)
-            sampled_maze = _sample_uniform_range(maze_range, (obs.shape[0],), obs.device, obs.dtype)
+            sampled_pre = wk_sample_uniform_range_values(pre_range, (obs.shape[0],), obs.device, obs.dtype)
+            sampled_slope = wk_sample_uniform_range_values(slope_range, (obs.shape[0],), obs.device, obs.dtype)
+            sampled_stairs = wk_sample_uniform_range_values(stairs_range, (obs.shape[0],), obs.device, obs.dtype)
+            sampled_maze = wk_sample_uniform_range_values(maze_range, (obs.shape[0],), obs.device, obs.dtype)
             sampled_non_maze = sampled_pre
             if terrain_phase_speed_enabled:
                 sampled_non_maze = torch.where(terrain_id == 1, sampled_slope, sampled_non_maze)
                 sampled_non_maze = torch.where(terrain_id == 2, sampled_stairs, sampled_non_maze)
-            if wall_gate is not None:
-                min_scale = float(rl_nav_conf.get("maze_anticipate_min_speed_scale", 1.0))
-                speed_scale = 1.0 - torch.clamp(wall_gate, 0.0, 1.0) * (1.0 - min_scale)
-                sampled_maze = sampled_maze * speed_scale
             sampled_vx = torch.where(maze_phase, sampled_maze, sampled_non_maze)
             command = command.clone()
             command[needs_sample, 0] = sampled_vx[needs_sample]
             command[needs_sample, 1] = 0.0
             command[needs_sample, 2] = 0.0
-            state["command"] = command
-
-        if wall_active.any() or yaw_cleanup.any():
-            command = command.clone()
-            if wall_gate is not None and turn_sign is not None and wall_active.any():
-                max_yaw = float(rl_nav_conf.get("maze_anticipate_yaw_cmd", 0.85))
-                yaw_cmd = torch.clamp(wall_gate * turn_sign * max_yaw, -max_yaw, max_yaw)
-                command[wall_active, 2] = yaw_cmd[wall_active]
-            command[yaw_cleanup, 2] = 0.0
             state["command"] = command
 
         state["timer"] = torch.where(
@@ -1347,7 +1247,7 @@ def _apply_rl_phase_command(
         command = command.clone()
         phase_changed = maze_phase != state["maze_phase"]
         invalid = command[:, 0] <= 0.0
-        fallback = _phase_command_midpoint(obs, maze_phase, usr_conf, obs.dtype)
+        fallback = wk_build_phase_command_fallback(obs, maze_phase, usr_conf, obs.dtype)
         command[phase_changed | invalid] = fallback[phase_changed | invalid]
 
     obs = obs.clone()
@@ -1360,7 +1260,7 @@ def _apply_rl_phase_command(
             critic_obs[:, 9:12] = command.to(device=critic_obs.device, dtype=critic_obs.dtype)
 
     if update_env_command:
-        _set_env_base_velocity_command(env, command, logger)
+        wk_override_env_base_velocity_command(env, command, logger)
 
     return obs, critic_obs, {
         "rl_phase_command_vx": command[:, 0].detach(),
@@ -1370,7 +1270,7 @@ def _apply_rl_phase_command(
     }
 
 
-def _apply_navigation_command(
+def wk_apply_navigation_controller_command(
     obs,
     critic_obs,
     env,
@@ -1379,7 +1279,7 @@ def _apply_navigation_command(
     update_nav_state=True,
     update_env_command=True,
 ):
-    """Patch policy/critic observations and env command with navigation output."""
+    """Patch policy and critic observations with the navigation controller output."""
     if nav_controller is None:
         return obs, critic_obs, {}
 
@@ -1396,12 +1296,12 @@ def _apply_navigation_command(
             critic_obs[:, 9:12] = command.to(device=critic_obs.device, dtype=critic_obs.dtype)
 
     if update_env_command:
-        _set_env_base_velocity_command(env, command, logger)
+        wk_override_env_base_velocity_command(env, command, logger)
     return obs, critic_obs, nav_stats
 
 
-def _compute_timeout_bootstrap_values(obs, critic_obs, env, nav_controller, agent, infos, logger=None, usr_conf=None):
-    """Evaluate V(s_{t+1}) for timeout bootstrapping using rollout-consistent obs."""
+def wk_evaluate_timeout_bootstrap_values(obs, critic_obs, env, nav_controller, agent, infos, logger=None, usr_conf=None):
+    """Evaluate V(s_{t+1}) for timeout bootstrapping using rollout-consistent inputs."""
     if "time_outs" not in infos:
         return None
 
@@ -1416,7 +1316,7 @@ def _compute_timeout_bootstrap_values(obs, critic_obs, env, nav_controller, agen
     value_obs = obs
     value_critic_obs = critic_obs
     if nav_controller is not None:
-        value_obs, value_critic_obs, _ = _apply_navigation_command(
+        value_obs, value_critic_obs, _ = wk_apply_navigation_controller_command(
             obs,
             critic_obs,
             env,
@@ -1426,7 +1326,7 @@ def _compute_timeout_bootstrap_values(obs, critic_obs, env, nav_controller, agen
             update_env_command=False,
         )
     if usr_conf is not None:
-        value_obs, value_critic_obs, _ = _apply_rl_phase_command(
+        value_obs, value_critic_obs, _ = wk_apply_phase_conditioned_command(
             value_obs,
             value_critic_obs,
             env,
@@ -1440,7 +1340,8 @@ def _compute_timeout_bootstrap_values(obs, critic_obs, env, nav_controller, agen
     return agent.algorithm.actor_critic.evaluate(value_input.detach()).detach()
 
 
-def _aggregate_navigation_stats(nav_metric_values):
+def wk_average_navigation_metric_history(nav_metric_values):
+    """Reduce navigation-side metric histories into scalar means."""
     aggregated = {}
     for key, values in nav_metric_values.items():
         if values:
@@ -1448,7 +1349,7 @@ def _aggregate_navigation_stats(nav_metric_values):
     return aggregated
 
 
-def run_episodes_(
+def wk_collect_rollout_batch(
     env,
     agent,
     storage,
@@ -1464,28 +1365,22 @@ def run_episodes_(
     usr_conf,
     nav_controller=None,
 ):
-    """
-    Run episodes to collect trajectory data.
-    杩愯 episodes 鏀堕泦杞ㄨ抗鏁版嵁銆?
-    Returns:
-        tuple: (last_obs, last_critic_obs, storage_stats)
-        杩斿洖鍊硷細(last_obs, last_critic_obs, storage_stats)
-    """
-    transition = RolloutStorage.Transition()
+    """Collect one fixed-length rollout batch and update episode statistics."""
+    transition = WkRolloutStorage.WkRolloutTransition()
     obs, critic_obs = last_obs, last_critic_obs
     nav_metric_values = defaultdict(list)
 
-    # TODO: for hierarchical training, handle the mismatch between env action and
-    # PPO storage action on your own.
-    # TODO锛氬闇€鍒嗗眰璁粌锛岃嚜琛屽鐞?env action 涓?PPO storage action 涓嶄竴鑷寸殑闂銆?
-    # Policy execution loop
-    # 绛栫暐鎵ц寰幆
+    # Note: TODO: for hierarchical training, handle the mismatch between env control action and
+    # Note: PPO storage control action on your own.
+    # Note: TODOenv control action PPO storage control action
+    # Note: Policy execution loop
+    #
     with torch.inference_mode():
         for i in range(agent.num_steps_per_env):
-            policy_obs, policy_critic_obs, nav_stats = _apply_navigation_command(
+            policy_obs, policy_critic_obs, nav_stats = wk_apply_navigation_controller_command(
                 obs, critic_obs, env, nav_controller, logger
             )
-            policy_obs, policy_critic_obs, phase_stats = _apply_rl_phase_command(
+            policy_obs, policy_critic_obs, phase_stats = wk_apply_phase_conditioned_command(
                 policy_obs,
                 policy_critic_obs,
                 env,
@@ -1497,8 +1392,8 @@ def run_episodes_(
             for key, value in phase_stats.items():
                 nav_metric_values[key].append(value.float().mean())
 
-            # Predict actions
-            # 棰勬祴鍔ㄤ綔
+            # Note: Predict actions
+            #
             predict_data = (policy_obs, policy_critic_obs)
             predict_result = agent.predict(predict_data)
 
@@ -1528,21 +1423,25 @@ def run_episodes_(
                 raise ValueError(f"Unexpected agent.predict return length: {len(predict_result)}")
             joint_actions = actions
 
-            # Clip joint actions for env
-            # 瑁佸壀鍏宠妭鍔ㄤ綔
+            # Note: Clip joint actions for env
+            #
             command_actions = torch.clip(joint_actions, -6.0, 6.0).to(agent.device)
             if i == 0:
                 logger.info(f"clipped_action:{command_actions}")
 
-            # Environment interaction
-            # 鐜浜や簰
+            # Note: Advance the simulator with the sampled actions.
             data = env.step(command_actions)
-            frame_no, obs, critic_obs, rewards, dones, infos = _process_env_step_result(data, episode, logger)
+            frame_no, obs, critic_obs, rewards, dones, infos = wk_unpack_env_step_result(data, episode, logger)
 
-            # Move tensors to device
-            # 灏嗗紶閲忕Щ鍔ㄥ埌璁惧
-            obs, critic_obs, rewards, dones = _move_tensors_to_device(obs, critic_obs, rewards, dones, agent.device)
-            timeout_bootstrap_values = _compute_timeout_bootstrap_values(
+            # Note: Retain all tensors on the learner device before storing transitions.
+            obs, critic_obs, rewards, dones = wk_move_step_tensors_to_device(
+                obs,
+                critic_obs,
+                rewards,
+                dones,
+                agent.device,
+            )
+            timeout_bootstrap_values = wk_evaluate_timeout_bootstrap_values(
                 obs,
                 critic_obs,
                 env,
@@ -1554,10 +1453,10 @@ def run_episodes_(
             )
             if nav_controller is not None:
                 nav_controller.reset(dones=dones)
-            _reset_phase_command_state(env, dones)
+            wk_reset_finished_phase_command_state(env, dones)
 
-            # Update episode statistics (always, regardless of decimation)
-            _update_episode_statistics(
+            # Note: Update episode statistics (always, regardless of decimation)
+            wk_refresh_completed_episode_buffers(
                 dones,
                 rewards,
                 infos,
@@ -1568,8 +1467,8 @@ def run_episodes_(
                 ep_infos,
             )
 
-            # Write transition to storage every step (flat PPO)
-            _update_transition_data(
+            # Note: Write transition to storage every step (flat PPO)
+            wk_populate_rollout_transition(
                 transition,
                 actions,
                 values,
@@ -1590,8 +1489,8 @@ def run_episodes_(
             if hasattr(agent.algorithm.actor_critic, "reset"):
                 agent.algorithm.actor_critic.reset(dones)
 
-        # Compute advantages and returns
-        storage_stats = _compute_advantages_and_returns(
+        # Note: Evaluate advantages and returns
+        storage_stats = wk_finalize_rollout_returns_and_statistics(
             storage,
             agent,
             obs,
@@ -1601,15 +1500,14 @@ def run_episodes_(
             nav_controller=nav_controller,
             usr_conf=usr_conf,
         )
-        storage_stats.update(_sample_rollout_tracking_stats(storage, usr_conf, logger))
-        storage_stats.update(_aggregate_navigation_stats(nav_metric_values))
+        storage_stats.update(wk_estimate_rollout_tracking_metrics(storage, usr_conf, logger))
+        storage_stats.update(wk_average_navigation_metric_history(nav_metric_values))
         last_obs = torch.clone(obs)
 
-    # Note: batch generation now handled by AlgorithmPPO.learn()
-    # Storage will be cleared after learning
-    # 娉細batch 鐢熸垚宸茬敱 AlgorithmPPO.learn() 澶勭悊锛?    # storage 灏嗗湪璁粌瀹屾垚鍚庤娓呯┖銆?
-    # Append a physics snapshot (averaged across all envs).
-    # Wrapped in try/except inside _sample_physics_stats, so always safe.
-    storage_stats.update(_sample_physics_stats(env, logger, critic_obs=critic_obs))
+    # Note: Batch generation is now handled by AlgorithmPPO.learn(), and storage is
+    # Note: cleared in the workflow after the optimization step finishes.
+    # Note: Append a physics snapshot (averaged across all envs).
+    # Note: Wrapped in try/except inside _sample_runtime_physics_metrics, so always safe.
+    storage_stats.update(wk_sample_runtime_physics_metrics(env, logger, critic_obs=critic_obs))
 
     return last_obs, critic_obs, storage_stats

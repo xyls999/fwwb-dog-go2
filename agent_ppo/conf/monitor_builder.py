@@ -1,378 +1,258 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 ###########################################################################
-# Copyright © 1998 - 2026 Tencent. All Rights Reserved.
+# Copyright (c) 1998 - 2026 Tencent. All Rights Reserved.
 ###########################################################################
 """
-Author: Tencent AI Arena Authors
+Monitor panel definitions for PPO training.
 """
 
 from kaiwudrl.common.monitor.monitor_config_builder import MonitorConfigBuilder
 
 
 def build_monitor():
-    """
-    # This function is used to create monitoring panel configurations for custom indicators.
-    # 该函数用于创建自定义指标的监控面板配置。
-    #
-    # Panel organization (Phase-0: flat-ground gait shaping):
-    # 面板组织（Phase-0 平地步态塑形）：
-    #
-    # Group 1: 算法指标   — PPO loss curves
-    # Group 2: 速度跟踪   — velocity tracking rewards (primary positive signal)
-    # Group 3: 姿态质量   — posture rewards (Phase-0 primary training objective)
-    # Group 4: 步态质量   — gait quality rewards (Phase-0 secondary objective)
-    # Group 5: 稳定/接触  — stability & contact penalties
-    # Group 6: 关节/动作  — joint & action smoothness penalties
-    # Group 7: 能耗       — energy / torque penalties (competition scoring)
+    """Build the dashboard layout used by PPO training."""
 
-    Returns:
-        dict: monitor configuration dictionary
-        返回值：监控配置字典
-    """
     monitor = MonitorConfigBuilder()
 
     config_dict = (
-        monitor.title("四足机器人导航")
-        # ==============================================================
-        # Group 0: Training progress — reward-weight-agnostic convergence signals
-        # Group 0: 训练进展 — 与 reward 权重无关的收敛信号
-        #
-        # mean_episode_length: average steps per episode.
-        #   Monotonically rising → robot survives longer → genuine convergence.
-        #   Plateau at low value → robot keeps falling → weight or algo problem.
-        #
-        # mean_episode_reward: cumulative reward summed over one episode.
-        #   Combines all weighted terms; the one true "fitness" curve.
-        #   Use this to compare runs with different weight configurations.
-        #
-        # mean_episode_length: 每 episode 的平均存活步数。
-        #   单调上升 → 机器人越来越耐摔 → 真正收敛。
-        #   早期很低并长期平台 → 机器人一直倒 → 权重或算法有问题。
-        #
-        # mean_episode_reward: 每 episode 全部加权奖励之和。
-        #   是唯一综合所有项的真实适应度曲线，用来跨配置对比训练。
-        # ==============================================================
-        .add_group(group_name="训练进展", group_name_en="training_progress")
-        .add_panel(name="平均 episode 步数", name_en="mean_episode_length", type="line")
-            .add_metric(metrics_name="mean_episode_length",
-                        expr="avg(mean_episode_length{})")
+        monitor.title("Quad Robot Nav")
+        .add_group(group_name="Train Progress", group_name_en="training_progress")
+        .add_panel(name="Mean Ep Length", name_en="mean_episode_length", type="line")
+            .add_metric(metrics_name="mean_episode_length", expr="avg(mean_episode_length{})")
             .end_panel()
-        .add_panel(name="每 episode 累计奖励", name_en="mean_episode_reward", type="line")
-            .add_metric(metrics_name="mean_episode_reward",
-                        expr="avg(mean_episode_reward{})")
+        .add_panel(name="Mean Ep Reward", name_en="mean_episode_reward", type="line")
+            .add_metric(metrics_name="mean_episode_reward", expr="avg(mean_episode_reward{})")
             .end_panel()
         .end_group()
-
-        # ==============================================================
-        # Group 1: PPO algorithm loss curves
-        # Group 1: PPO 算法损失曲线
-        # ==============================================================
-        .add_group(group_name="算法指标", group_name_en="algorithm")
-        .add_panel(name="总损失", name_en="total_loss", type="line")
+        .add_group(group_name="Algorithm", group_name_en="algorithm")
+        .add_panel(name="Total Loss", name_en="total_loss", type="line")
             .add_metric(metrics_name="total_loss", expr="avg(total_loss{})")
             .end_panel()
-        .add_panel(name="价值损失", name_en="value_loss", type="line")
+        .add_panel(name="Value Loss", name_en="value_loss", type="line")
             .add_metric(metrics_name="value_loss", expr="avg(value_loss{})")
             .end_panel()
-        .add_panel(name="策略损失", name_en="policy_loss", type="line")
+        .add_panel(name="Policy Loss", name_en="policy_loss", type="line")
             .add_metric(metrics_name="policy_loss", expr="avg(policy_loss{})")
             .end_panel()
-        .add_panel(name="熵损失", name_en="entropy_loss", type="line")
+        .add_panel(name="Entropy Loss", name_en="entropy_loss", type="line")
             .add_metric(metrics_name="entropy_loss", expr="avg(entropy_loss{})")
             .end_panel()
         .end_group()
-
-        # ==============================================================
-        # Group 2: Velocity tracking (primary positive reward signal)
-        # Group 2: 速度跟踪（主正向奖励信号）
-        # ==============================================================
-        .add_group(group_name="速度跟踪", group_name_en="velocity_tracking")
-        .add_panel(name="线速度跟踪", name_en="reward_track_lin_vel_xy", type="line")
-            .add_metric(metrics_name="reward_track_lin_vel_xy",
-                        expr="avg(reward_track_lin_vel_xy{})")
+        .add_group(group_name="Vel Tracking", group_name_en="velocity_tracking")
+        .add_panel(name="Lin Vel Track", name_en="reward_track_lin_vel_xy", type="line")
+            .add_metric(metrics_name="reward_track_lin_vel_xy", expr="avg(reward_track_lin_vel_xy{})")
             .end_panel()
-        .add_panel(name="偏航角速度跟踪", name_en="reward_track_ang_vel_z", type="line")
-            .add_metric(metrics_name="reward_track_ang_vel_z",
-                        expr="avg(reward_track_ang_vel_z{})")
+        .add_panel(name="Yaw Vel Track", name_en="reward_track_ang_vel_z", type="line")
+            .add_metric(metrics_name="reward_track_ang_vel_z", expr="avg(reward_track_ang_vel_z{})")
             .end_panel()
-        .add_panel(name="课程追踪比例", name_en="vel_curriculum_tracking_ratio", type="line")
-            .add_metric(metrics_name="vel_curriculum_tracking_ratio",
-                        expr="avg(vel_curriculum_tracking_ratio{})")
+        .add_panel(name="Curr Track Ratio", name_en="vel_curriculum_tracking_ratio", type="line")
+            .add_metric(
+                metrics_name="vel_curriculum_tracking_ratio",
+                expr="avg(vel_curriculum_tracking_ratio{})",
+            )
             .end_panel()
-        .add_panel(name="速度课程等级", name_en="vel_curriculum_stage", type="line")
-            .add_metric(metrics_name="vel_curriculum_stage",
-                        expr="avg(vel_curriculum_stage{})")
+        .add_panel(name="Curr Stage", name_en="vel_curriculum_stage", type="line")
+            .add_metric(metrics_name="vel_curriculum_stage", expr="avg(vel_curriculum_stage{})")
             .end_panel()
         .end_group()
-
-        # ==============================================================
-        # Group 3: Posture quality (Phase-0 PRIMARY objective)
-        # Group 3: 姿态质量（Phase-0 核心训练目标）
-        # ==============================================================
-        .add_group(group_name="姿态质量", group_name_en="posture_quality")
-        .add_panel(name="机身水平姿态惩罚", name_en="reward_flat_orientation", type="line")
-            .add_metric(metrics_name="reward_flat_orientation",
-                        expr="avg(reward_flat_orientation{})")
+        .add_group(group_name="Posture", group_name_en="posture_quality")
+        .add_panel(name="Flat Orient Pen", name_en="reward_flat_orientation", type="line")
+            .add_metric(metrics_name="reward_flat_orientation", expr="avg(reward_flat_orientation{})")
             .end_panel()
-        .add_panel(name="机身高度惩罚", name_en="reward_correct_base_height", type="line")
-            .add_metric(metrics_name="reward_correct_base_height",
-                        expr="avg(reward_correct_base_height{})")
+        .add_panel(name="Base Height Pen", name_en="reward_correct_base_height", type="line")
+            .add_metric(metrics_name="reward_correct_base_height", expr="avg(reward_correct_base_height{})")
             .end_panel()
-        .add_panel(name="全身关节偏离惩罚", name_en="reward_joint_position_penalty", type="line")
-            .add_metric(metrics_name="reward_joint_position_penalty",
-                        expr="avg(reward_joint_position_penalty{})")
+        .add_panel(
+            name="Joint Pos Pen",
+            name_en="reward_joint_position_penalty",
+            type="line",
+        )
+            .add_metric(
+                metrics_name="reward_joint_position_penalty",
+                expr="avg(reward_joint_position_penalty{})",
+            )
             .end_panel()
-        .add_panel(name="侧向漂移惩罚", name_en="reward_base_lateral_vel", type="line")
-            .add_metric(metrics_name="reward_base_lateral_vel",
-                        expr="avg(reward_base_lateral_vel{})")
+        .add_panel(name="Lat Drift Pen", name_en="reward_base_lateral_vel", type="line")
+            .add_metric(metrics_name="reward_base_lateral_vel", expr="avg(reward_base_lateral_vel{})")
             .end_panel()
-        .add_panel(name="pitch roll 角速度惩罚", name_en="reward_ang_vel_xy", type="line")
-            .add_metric(metrics_name="reward_ang_vel_xy",
-                        expr="avg(reward_ang_vel_xy{})")
+        .add_panel(name="Pitch Roll Rate", name_en="reward_ang_vel_xy", type="line")
+            .add_metric(metrics_name="reward_ang_vel_xy", expr="avg(reward_ang_vel_xy{})")
             .end_panel()
         .end_group()
-
-        # ==============================================================
-        # Group 4: Gait quality (Phase-0 secondary objective)
-        # Group 4: 步态质量（Phase-0 次要训练目标）
-        # ==============================================================
-        .add_group(group_name="步态质量", group_name_en="gait_quality")
-        .add_panel(name="脚部滞空时间奖励", name_en="reward_feet_air_time", type="line")
-            .add_metric(metrics_name="reward_feet_air_time",
-                        expr="avg(reward_feet_air_time{})")
+        .add_group(group_name="Gait", group_name_en="gait_quality")
+        .add_panel(name="Feet Air Time", name_en="reward_feet_air_time", type="line")
+            .add_metric(metrics_name="reward_feet_air_time", expr="avg(reward_feet_air_time{})")
             .end_panel()
-        .add_panel(name="关节速度惩罚", name_en="reward_dof_vel", type="line")
-            .add_metric(metrics_name="reward_dof_vel",
-                        expr="avg(reward_dof_vel{})")
+        .add_panel(name="Joint Vel Pen", name_en="reward_dof_vel", type="line")
+            .add_metric(metrics_name="reward_dof_vel", expr="avg(reward_dof_vel{})")
             .end_panel()
-        .add_panel(name="步态对称性惩罚", name_en="reward_air_time_variance_penalty", type="line")
-            .add_metric(metrics_name="reward_air_time_variance_penalty",
-                        expr="avg(reward_air_time_variance_penalty{})")
+        .add_panel(
+            name="AirTime Var Pen",
+            name_en="reward_air_time_variance_penalty",
+            type="line",
+        )
+            .add_metric(
+                metrics_name="reward_air_time_variance_penalty",
+                expr="avg(reward_air_time_variance_penalty{})",
+            )
             .end_panel()
-        .add_panel(name="原地旋转惩罚", name_en="reward_pivot_turning", type="line")
-            .add_metric(metrics_name="reward_pivot_turning",
-                        expr="avg(reward_pivot_turning{})")
+        .add_panel(name="Pivot Turn Pen", name_en="reward_pivot_turning", type="line")
+            .add_metric(metrics_name="reward_pivot_turning", expr="avg(reward_pivot_turning{})")
             .end_panel()
-        .add_panel(name="脚部打滑惩罚", name_en="reward_feet_slide", type="line")
-            .add_metric(metrics_name="reward_feet_slide",
-                        expr="avg(reward_feet_slide{})")
+        .add_panel(name="Feet Slide Pen", name_en="reward_feet_slide", type="line")
+            .add_metric(metrics_name="reward_feet_slide", expr="avg(reward_feet_slide{})")
             .end_panel()
-        .add_panel(name="脚撞台阶边缘惩罚", name_en="reward_feet_stumble", type="line")
-            .add_metric(metrics_name="reward_feet_stumble",
-                        expr="avg(reward_feet_stumble{})")
+        .add_panel(name="Feet Stumble Pen", name_en="reward_feet_stumble", type="line")
+            .add_metric(metrics_name="reward_feet_stumble", expr="avg(reward_feet_stumble{})")
             .end_panel()
         .end_group()
-
-        # ==============================================================
-        # Group 5: Stability & contact penalties
-        # Group 5: 稳定性与接触惩罚
-        # ==============================================================
-        .add_group(group_name="稳定接触", group_name_en="stability_contact")
-        .add_panel(name="垂直速度惩罚", name_en="reward_lin_vel_z", type="line")
-            .add_metric(metrics_name="reward_lin_vel_z",
-                        expr="avg(reward_lin_vel_z{})")
+        .add_group(group_name="Stab Contact", group_name_en="stability_contact")
+        .add_panel(name="Vert Vel Pen", name_en="reward_lin_vel_z", type="line")
+            .add_metric(metrics_name="reward_lin_vel_z", expr="avg(reward_lin_vel_z{})")
             .end_panel()
-        .add_panel(name="非预期接触惩罚", name_en="reward_undesired_contacts", type="line")
-            .add_metric(metrics_name="reward_undesired_contacts",
-                        expr="avg(reward_undesired_contacts{})")
+        .add_panel(name="Bad Contact Pen", name_en="reward_undesired_contacts", type="line")
+            .add_metric(metrics_name="reward_undesired_contacts", expr="avg(reward_undesired_contacts{})")
             .end_panel()
-        .add_panel(name="终止惩罚", name_en="reward_termination", type="line")
-            .add_metric(metrics_name="reward_termination",
-                        expr="avg(reward_termination{})")
+        .add_panel(name="Termination Penalty", name_en="reward_termination", type="line")
+            .add_metric(metrics_name="reward_termination", expr="avg(reward_termination{})")
             .end_panel()
-        .add_panel(name="关节位置极限惩罚", name_en="reward_dof_pos_limits", type="line")
-            .add_metric(metrics_name="reward_dof_pos_limits",
-                        expr="avg(reward_dof_pos_limits{})")
+        .add_panel(name="Joint Limit Pen", name_en="reward_dof_pos_limits", type="line")
+            .add_metric(metrics_name="reward_dof_pos_limits", expr="avg(reward_dof_pos_limits{})")
             .end_panel()
         .end_group()
-
-        # ==============================================================
-        # Group 6: Joint & action smoothness penalties
-        # Group 6: 关节与动作平滑惩罚
-        # ==============================================================
-        .add_group(group_name="关节动作平滑", group_name_en="joint_action_smoothness")
-        .add_panel(name="关节加速度惩罚", name_en="reward_joint_acc", type="line")
-            .add_metric(metrics_name="reward_joint_acc",
-                        expr="avg(reward_joint_acc{})")
+        .add_group(
+            group_name="Action Smooth",
+            group_name_en="joint_action_smoothness",
+        )
+        .add_panel(name="Joint Acc Pen", name_en="reward_joint_acc", type="line")
+            .add_metric(metrics_name="reward_joint_acc", expr="avg(reward_joint_acc{})")
             .end_panel()
-        .add_panel(name="动作变化率惩罚 一阶", name_en="reward_action_rate", type="line")
-            .add_metric(metrics_name="reward_action_rate",
-                        expr="avg(reward_action_rate{})")
+        .add_panel(name="Action Rate Penalty", name_en="reward_action_rate", type="line")
+            .add_metric(metrics_name="reward_action_rate", expr="avg(reward_action_rate{})")
             .end_panel()
-        .add_panel(name="动作平滑惩罚 二阶", name_en="reward_action_smoothness", type="line")
-            .add_metric(metrics_name="reward_action_smoothness",
-                        expr="avg(reward_action_smoothness{})")
+        .add_panel(name="Action Smooth Pen", name_en="reward_action_smoothness", type="line")
+            .add_metric(metrics_name="reward_action_smoothness", expr="avg(reward_action_smoothness{})")
             .end_panel()
         .end_group()
-
-        # ==============================================================
-        # Group 7: Energy / torque (competition scoring items)
-        # Group 7: 能耗 / 扭矩（赛题评分项）
-        # ==============================================================
-        .add_group(group_name="能耗扭矩", group_name_en="energy_torque")
-        .add_panel(name="能耗惩罚", name_en="reward_energy", type="line")
-            .add_metric(metrics_name="reward_energy",
-                        expr="avg(reward_energy{})")
+        .add_group(group_name="Energy Torque", group_name_en="energy_torque")
+        .add_panel(name="Energy Penalty", name_en="reward_energy", type="line")
+            .add_metric(metrics_name="reward_energy", expr="avg(reward_energy{})")
             .end_panel()
-        .add_panel(name="关节扭矩惩罚", name_en="reward_joint_torques", type="line")
-            .add_metric(metrics_name="reward_joint_torques",
-                        expr="avg(reward_joint_torques{})")
+        .add_panel(name="Joint Torque Pen", name_en="reward_joint_torques", type="line")
+            .add_metric(metrics_name="reward_joint_torques", expr="avg(reward_joint_torques{})")
             .end_panel()
         .end_group()
-
-        # ==============================================================
-        # ==============================================================
-        # Group 8: RL navigation rewards
-        # ==============================================================
-        .add_group(group_name="RL导航", group_name_en="rl_navigation")
-        .add_panel(name="前进头向", name_en="reward_forward_heading_velocity", type="line")
-            .add_metric(metrics_name="reward_forward_heading_velocity",
-                        expr="avg(reward_forward_heading_velocity{})")
+        .add_group(group_name="RL Nav", group_name_en="rl_navigation")
+        .add_panel(name="Fwd Head Vel", name_en="reward_forward_heading_velocity", type="line")
+            .add_metric(
+                metrics_name="reward_forward_heading_velocity",
+                expr="avg(reward_forward_heading_velocity{})",
+            )
             .end_panel()
-        .add_panel(name="后退惩罚", name_en="reward_backward_penalty", type="line")
-            .add_metric(metrics_name="reward_backward_penalty",
-                        expr="avg(reward_backward_penalty{})")
+        .add_panel(name="Backward Penalty", name_en="reward_backward_penalty", type="line")
+            .add_metric(metrics_name="reward_backward_penalty", expr="avg(reward_backward_penalty{})")
             .end_panel()
-        .add_panel(name="目标朝向", name_en="reward_goal_heading_alignment", type="line")
-            .add_metric(metrics_name="reward_goal_heading_alignment",
-                        expr="avg(reward_goal_heading_alignment{})")
+        .add_panel(name="Goal Head Align", name_en="reward_goal_heading_alignment", type="line")
+            .add_metric(
+                metrics_name="reward_goal_heading_alignment",
+                expr="avg(reward_goal_heading_alignment{})",
+            )
             .end_panel()
-        .add_panel(name="目标推进", name_en="reward_goal_velocity_projection", type="line")
-            .add_metric(metrics_name="reward_goal_velocity_projection",
-                        expr="avg(reward_goal_velocity_projection{})")
+        .add_panel(
+            name="Goal Vel Proj",
+            name_en="reward_goal_velocity_projection",
+            type="line",
+        )
+            .add_metric(
+                metrics_name="reward_goal_velocity_projection",
+                expr="avg(reward_goal_velocity_projection{})",
+            )
             .end_panel()
-        .add_panel(name="逆向惩罚", name_en="reward_goal_backtrack_penalty", type="line")
-            .add_metric(metrics_name="reward_goal_backtrack_penalty",
-                        expr="avg(reward_goal_backtrack_penalty{})")
+        .add_panel(
+            name="Goal Back Pen",
+            name_en="reward_goal_backtrack_penalty",
+            type="line",
+        )
+            .add_metric(
+                metrics_name="reward_goal_backtrack_penalty",
+                expr="avg(reward_goal_backtrack_penalty{})",
+            )
             .end_panel()
-        .add_panel(name="接近目标", name_en="reward_approach_goal", type="line")
-            .add_metric(metrics_name="reward_approach_goal",
-                        expr="avg(reward_approach_goal{})")
+        .add_panel(name="Approach Goal", name_en="reward_approach_goal", type="line")
+            .add_metric(metrics_name="reward_approach_goal", expr="avg(reward_approach_goal{})")
             .end_panel()
-        .add_panel(name="目标距离", name_en="reward_goal_distance", type="line")
-            .add_metric(metrics_name="reward_goal_distance",
-                        expr="avg(reward_goal_distance{})")
+        .add_panel(name="Goal Distance", name_en="reward_goal_distance", type="line")
+            .add_metric(metrics_name="reward_goal_distance", expr="avg(reward_goal_distance{})")
             .end_panel()
-        .add_panel(name="到达目标", name_en="reward_reach_goal", type="line")
-            .add_metric(metrics_name="reward_reach_goal",
-                        expr="avg(reward_reach_goal{})")
+        .add_panel(name="Reach Goal", name_en="reward_reach_goal", type="line")
+            .add_metric(metrics_name="reward_reach_goal", expr="avg(reward_reach_goal{})")
             .end_panel()
-        .add_panel(name="任务完成", name_en="reward_task_complete", type="line")
-            .add_metric(metrics_name="reward_task_complete",
-                        expr="avg(reward_task_complete{})")
+        .add_panel(name="Task Complete", name_en="reward_task_complete", type="line")
+            .add_metric(metrics_name="reward_task_complete", expr="avg(reward_task_complete{})")
             .end_panel()
-        .add_panel(name="导航时间", name_en="reward_navigation_time", type="line")
-            .add_metric(metrics_name="reward_navigation_time",
-                        expr="avg(reward_navigation_time{})")
+        .add_panel(name="Nav Time", name_en="reward_navigation_time", type="line")
+            .add_metric(metrics_name="reward_navigation_time", expr="avg(reward_navigation_time{})")
             .end_panel()
-        .add_panel(name="迷宫门控", name_en="reward_maze_context_gate", type="line")
-            .add_metric(metrics_name="reward_maze_context_gate",
-                        expr="avg(reward_maze_context_gate{})")
+        .add_panel(name="Maze Ctx Gate", name_en="reward_maze_context_gate", type="line")
+            .add_metric(metrics_name="reward_maze_context_gate", expr="avg(reward_maze_context_gate{})")
             .end_panel()
-        .add_panel(name="撞墙惩罚", name_en="reward_wall_collision", type="line")
-            .add_metric(metrics_name="reward_wall_collision",
-                        expr="avg(reward_wall_collision{})")
+        .add_panel(name="Wall Coll Pen", name_en="reward_wall_collision", type="line")
+            .add_metric(metrics_name="reward_wall_collision", expr="avg(reward_wall_collision{})")
             .end_panel()
-        .add_panel(name="贴墙停滞", name_en="reward_wall_stall_penalty", type="line")
-            .add_metric(metrics_name="reward_wall_stall_penalty",
-                        expr="avg(reward_wall_stall_penalty{})")
+        .add_panel(name="Wall Stall Pen", name_en="reward_wall_stall_penalty", type="line")
+            .add_metric(metrics_name="reward_wall_stall_penalty", expr="avg(reward_wall_stall_penalty{})")
             .end_panel()
-        .add_panel(name="离墙惩罚", name_en="reward_wall_proximity", type="line")
-            .add_metric(metrics_name="reward_wall_proximity",
-                        expr="avg(reward_wall_proximity{})")
+        .add_panel(name="Wall Prox Pen", name_en="reward_wall_proximity", type="line")
+            .add_metric(metrics_name="reward_wall_proximity", expr="avg(reward_wall_proximity{})")
             .end_panel()
-        .add_panel(name="空旷奖励", name_en="reward_open_space", type="line")
-            .add_metric(metrics_name="reward_open_space",
-                        expr="avg(reward_open_space{})")
+        .add_panel(name="Open Space Reward", name_en="reward_open_space", type="line")
+            .add_metric(metrics_name="reward_open_space", expr="avg(reward_open_space{})")
             .end_panel()
-        .add_panel(name="中心偏离", name_en="reward_corridor_centering", type="line")
-            .add_metric(metrics_name="reward_corridor_centering",
-                        expr="avg(reward_corridor_centering{})")
+        .add_panel(name="Corridor Centering", name_en="reward_corridor_centering", type="line")
+            .add_metric(metrics_name="reward_corridor_centering", expr="avg(reward_corridor_centering{})")
             .end_panel()
-        .add_panel(name="探索奖励", name_en="reward_directed_exploration", type="line")
-            .add_metric(metrics_name="reward_directed_exploration",
-                        expr="avg(reward_directed_exploration{})")
+        .add_panel(name="Dir Explore", name_en="reward_directed_exploration", type="line")
+            .add_metric(
+                metrics_name="reward_directed_exploration",
+                expr="avg(reward_directed_exploration{})",
+            )
             .end_panel()
-        .add_panel(name="停滞惩罚", name_en="reward_stuck_penalty", type="line")
-            .add_metric(metrics_name="reward_stuck_penalty",
-                        expr="avg(reward_stuck_penalty{})")
+        .add_panel(name="Stuck Penalty", name_en="reward_stuck_penalty", type="line")
+            .add_metric(metrics_name="reward_stuck_penalty", expr="avg(reward_stuck_penalty{})")
             .end_panel()
         .end_group()
-
-        # Group 9: Physical observations (SI units, weight-independent)
-        # Group 8: 物理观测量（SI 单位，与 reward 权重无关）
-        #
-        # These panels show the *physical* quantities that the reward functions
-        # operate on, NOT the weighted reward values.  They let you answer
-        # "is the robot actually converging in terms of real physics?"
-        # independently of whether you've tuned the reward weights well.
-        #
-        # 这些面板显示奖励函数实际计算所用的物理量（SI 单位），
-        # 而非加权后的奖励值。用于独立于权重设置判断"机器人物理收敛了吗"。
-        #
-        # obs_lin_vel_x_error: mean |cmd_vx - actual_vx| (m/s)
-        #   → 速度追踪误差（前向）；收敛后应趋近 0 m/s。
-        #     值持续 >0.3 m/s 且 reward 已平台 → 权重可能有矛盾梯度。
-        #
-        # obs_lin_vel_y_error: mean |cmd_vy - actual_vy| (m/s)
-        #   → 速度追踪误差（侧向）；正常约 0.1 m/s 以内。
-        #
-        # obs_actual_vel_x: mean actual forward speed (m/s)
-        #   → 机器人实际平均前向速度；Stage-0 目标 0.25 m/s，随阶段升高。
-        #
-        # obs_base_height: mean base height (m)
-        #   → 机身高度均值；目标 0.38 m。
-        #     偏低说明腿弯曲不足（或摔倒率高）；偏高说明过度伸展。
-        #
-        # obs_ang_vel_xy: mean |ω_pitch, ω_roll| magnitude (rad/s)
-        #   → pitch/roll 角速度幅值；反映机身倾斜程度。
-        #     正常行走约 0.3–0.8 rad/s；持续 >1.5 说明姿态不稳定。
-        # ==============================================================
-        .add_group(group_name="物理观测量", group_name_en="physics_obs")
-        .add_panel(name="前向速度对照", name_en="velocity_x_stat", type="stat")
-            .add_metric(metrics_name="cmd_vx",
-                        expr="avg(obs_cmd_vel_x{})")
-            .add_metric(metrics_name="actual_vx",
-                        expr="avg(obs_actual_vel_x{})")
+        .add_group(group_name="Physics Obs", group_name_en="physics_obs")
+        .add_panel(name="Fwd Vel Ref", name_en="velocity_x_stat", type="stat")
+            .add_metric(metrics_name="cmd_vx", expr="avg(obs_cmd_vel_x{})")
+            .add_metric(metrics_name="actual_vx", expr="avg(obs_actual_vel_x{})")
             .end_panel()
-        .add_panel(name="侧向速度对照", name_en="velocity_y_stat", type="stat")
-            .add_metric(metrics_name="cmd_vy",
-                        expr="avg(obs_cmd_vel_y{})")
-            .add_metric(metrics_name="actual_vy",
-                        expr="avg(obs_actual_vel_y{})")
+        .add_panel(name="Lat Vel Ref", name_en="velocity_y_stat", type="stat")
+            .add_metric(metrics_name="cmd_vy", expr="avg(obs_cmd_vel_y{})")
+            .add_metric(metrics_name="actual_vy", expr="avg(obs_actual_vel_y{})")
             .end_panel()
-        .add_panel(name="偏航速度对照", name_en="velocity_yaw_stat", type="stat")
-            .add_metric(metrics_name="cmd_yaw",
-                        expr="avg(obs_cmd_yaw{})")
-            .add_metric(metrics_name="actual_yaw",
-                        expr="avg(obs_actual_yaw{})")
+        .add_panel(name="Yaw Vel Ref", name_en="velocity_yaw_stat", type="stat")
+            .add_metric(metrics_name="cmd_yaw", expr="avg(obs_cmd_yaw{})")
+            .add_metric(metrics_name="actual_yaw", expr="avg(obs_actual_yaw{})")
             .end_panel()
-        .add_panel(name="速度误差对照", name_en="velocity_error_stat", type="stat")
-            .add_metric(metrics_name="vx_error",
-                        expr="avg(obs_lin_vel_x_error{})")
-            .add_metric(metrics_name="yaw_error",
-                        expr="avg(obs_yaw_error{})")
+        .add_panel(name="Vel Err Ref", name_en="velocity_error_stat", type="stat")
+            .add_metric(metrics_name="vx_error", expr="avg(obs_lin_vel_x_error{})")
+            .add_metric(metrics_name="yaw_error", expr="avg(obs_yaw_error{})")
             .end_panel()
-        .add_panel(name="前向速度追踪误差", name_en="obs_lin_vel_x_error", type="line")
-            .add_metric(metrics_name="obs_lin_vel_x_error",
-                        expr="avg(obs_lin_vel_x_error{})")
+        .add_panel(name="Fwd Vel Err", name_en="obs_lin_vel_x_error", type="line")
+            .add_metric(metrics_name="obs_lin_vel_x_error", expr="avg(obs_lin_vel_x_error{})")
             .end_panel()
-        .add_panel(name="侧向速度追踪误差", name_en="obs_lin_vel_y_error", type="line")
-            .add_metric(metrics_name="obs_lin_vel_y_error",
-                        expr="avg(obs_lin_vel_y_error{})")
+        .add_panel(name="Lat Vel Err", name_en="obs_lin_vel_y_error", type="line")
+            .add_metric(metrics_name="obs_lin_vel_y_error", expr="avg(obs_lin_vel_y_error{})")
             .end_panel()
-        .add_panel(name="实际前向速度", name_en="obs_actual_vel_x", type="line")
-            .add_metric(metrics_name="obs_actual_vel_x",
-                        expr="avg(obs_actual_vel_x{})")
+        .add_panel(name="Actual Fwd Vel", name_en="obs_actual_vel_x", type="line")
+            .add_metric(metrics_name="obs_actual_vel_x", expr="avg(obs_actual_vel_x{})")
             .end_panel()
-        .add_panel(name="机身高度", name_en="obs_base_height", type="line")
-            .add_metric(metrics_name="obs_base_height",
-                        expr="avg(obs_base_height{})")
+        .add_panel(name="Base Height", name_en="obs_base_height", type="line")
+            .add_metric(metrics_name="obs_base_height", expr="avg(obs_base_height{})")
             .end_panel()
-        .add_panel(name="pitch roll 角速度", name_en="obs_ang_vel_xy", type="line")
-            .add_metric(metrics_name="obs_ang_vel_xy",
-                        expr="avg(obs_ang_vel_xy{})")
+        .add_panel(name="Pitch Roll Rate", name_en="obs_ang_vel_xy", type="line")
+            .add_metric(metrics_name="obs_ang_vel_xy", expr="avg(obs_ang_vel_xy{})")
             .end_panel()
         .end_group()
         .build()

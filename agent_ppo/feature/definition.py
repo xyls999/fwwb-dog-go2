@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 ###########################################################################
-# Copyright © 1998 - 2026 Tencent. All Rights Reserved.
+# Copyright  1998 - 2026 Tencent. All Rights Reserved.
 ###########################################################################
 """
 Author: Tencent AI Arena Authors
@@ -20,16 +20,16 @@ ActData = create_cls(
 )
 
 
-class RolloutStorage:
+class WkRolloutStorage:
     """
     Experience replay buffer for PPO algorithm.
-    PPO 算法经验回放缓冲区。
+    PPO
 
-    V3: no history buffer — obs contains proprio + height_scan directly.
-    V3：无 history 缓冲区 —— obs 直接包含 proprio + height_scan。
+    V3: no history buffer  obs contains proprio + height_scan directly.
+    V3 history   obs  proprio + height_scan
     """
 
-    class Transition:
+    class WkRolloutTransition:
         def __init__(self):
             self.observations = None
             self.critic_observations = None
@@ -61,7 +61,7 @@ class RolloutStorage:
         self.num_transitions_per_env = num_transitions_per_env
         self.num_envs = num_envs
 
-        self._init_buffers(
+        self._wk_init_buffers(
             num_transitions_per_env,
             num_envs,
             obs_shape,
@@ -73,7 +73,7 @@ class RolloutStorage:
         self.saved_hidden_states_c = None
         self.step = 0
 
-    def _init_buffers(
+    def _wk_init_buffers(
         self,
         num_transitions_per_env,
         num_envs,
@@ -83,40 +83,36 @@ class RolloutStorage:
     ):
         """
         Initialize all tensor buffers.
-        初始化所有张量缓冲区。
+
         """
         shape = (num_transitions_per_env, num_envs)
 
-        # Observation buffers
-        # 观测缓冲区
+        # Note: Input input observation buffers
         self.observations = torch.zeros(*shape, *obs_shape, device=self.device)
         if privileged_obs_shape[0] is not None:
             self.privileged_observations = torch.zeros(*shape, *privileged_obs_shape, device=self.device)
         else:
             self.privileged_observations = None
 
-        # Action-related buffers
-        # 动作相关缓冲区
+        # Note: Control control action-related buffers
         self.actions = torch.zeros(*shape, *actions_shape, device=self.device)
         self.actions_log_prob = torch.zeros(*shape, 1, device=self.device)
         self.mu = torch.zeros(*shape, *actions_shape, device=self.device)
         self.sigma = torch.zeros(*shape, *actions_shape, device=self.device)
 
-        # Reward and value buffers
-        # 奖励和价值缓冲区
+        # Note: Return term and value buffers
         self.rewards = torch.zeros(*shape, 1, device=self.device)
         self.values = torch.zeros(*shape, 1, device=self.device)
         self.returns = torch.zeros(*shape, 1, device=self.device)
         self.advantages = torch.zeros(*shape, 1, device=self.device)
 
-        # Done flags
-        # 完成标志
+        # Note: Done flags
         self.dones = torch.zeros(*shape, 1, device=self.device).byte()
 
     def add_transitions(self, transition):
         """
         Add a transition to the rollout buffer.
-        向 rollout 缓冲区添加一个转移。
+         rollout
         """
         if self.step >= self.num_transitions_per_env:
             raise AssertionError("Rollout buffer overflow")
@@ -130,29 +126,29 @@ class RolloutStorage:
         self.actions_log_prob[self.step].copy_(transition.actions_log_prob.view(-1, 1))
         self.mu[self.step].copy_(transition.action_mean)
         self.sigma[self.step].copy_(transition.action_sigma)
-        self._save_hidden_states(transition.hidden_states)
+        self._wk_save_hidden_states(transition.hidden_states)
         self.step += 1
 
-    def _save_hidden_states(self, hidden_states):
+    def _wk_save_hidden_states(self, hidden_states):
         """
         Save RNN hidden states.
-        保存 RNN 隐藏状态。
+         RNN
         """
         if hidden_states is None or (isinstance(hidden_states, tuple) and hidden_states[0] is None):
             return
-        hid_a, hid_c = self._normalize_hidden_states(hidden_states)
+        hid_a, hid_c = self._wk_normalize_hidden_states(hidden_states)
         if self.saved_hidden_states_a is None:
-            self._init_hidden_state_storage(hid_a, hid_c)
+            self._wk_init_hidden_state_storage(hid_a, hid_c)
         for i in range(len(hid_a)):
             self.saved_hidden_states_a[i][self.step].copy_(hid_a[i])
             self.saved_hidden_states_c[i][self.step].copy_(hid_c[i])
 
-    def _normalize_hidden_states(self, hidden_states):
+    def _wk_normalize_hidden_states(self, hidden_states):
         hid_a = hidden_states[0] if isinstance(hidden_states[0], tuple) else (hidden_states[0],)
         hid_c = hidden_states[1] if isinstance(hidden_states[1], tuple) else (hidden_states[1],)
         return hid_a, hid_c
 
-    def _init_hidden_state_storage(self, hid_a, hid_c):
+    def _wk_init_hidden_state_storage(self, hid_a, hid_c):
         self.saved_hidden_states_a = [
             torch.zeros(self.observations.shape[0], *hid_a[i].shape, device=self.device) for i in range(len(hid_a))
         ]
@@ -163,17 +159,17 @@ class RolloutStorage:
     def clear(self):
         """Reset buffer pointer.
 
-        重置缓冲区指针。
+
         """
         self.step = 0
 
     def compute_returns(self, last_values, gamma, lam):
         """
         Calculate returns and advantages using GAE.
-        使用 GAE 方法计算回报和优势函数。
+         GAE
         """
-        # Sanitize inputs before backward GAE pass
-        # GAE 反向传递前清洗输入数据
+        # Note: Sanitize inputs before backward GAE pass
+        # Note: GAE
         last_values = torch.nan_to_num(last_values, nan=0.0, posinf=0.0, neginf=0.0)
         self.values.copy_(torch.nan_to_num(self.values, nan=0.0, posinf=0.0, neginf=0.0))
         self.rewards.copy_(torch.nan_to_num(self.rewards, nan=0.0, posinf=0.0, neginf=0.0))
@@ -189,18 +185,17 @@ class RolloutStorage:
             advantage = delta + next_is_not_terminal * gamma * lam * advantage
             self.returns[step] = advantage + self.values[step]
 
-        # Sanitize returns against NaN/Inf (extreme rewards or bad values)
-        # 清洗 returns 中可能出现的 NaN/Inf（极端奖励或坏价值估计）
+        # Note: Sanitize returns against NaN/Inf (extreme rewards or bad values)
+        #  Note: returns  NaN/Inf
         self.returns.copy_(torch.nan_to_num(self.returns, nan=0.0, posinf=0.0, neginf=0.0))
 
-        # Compute and normalize advantages
-        # 计算并标准化优势函数
+        # Note: Evaluate and normalize advantages
         self.advantages = self.returns - self.values
         adv_std = self.advantages.std()
         if not torch.isfinite(adv_std) or adv_std < 1e-6:
-            # Variance is too small or invalid -> skip normalization, only subtract the
-            # mean, to avoid division by zero that would produce NaN.
-            # 方差过小或非法 → 跳过归一化，只去均值，避免除 0 产生 NaN
+            # Note: Variance is too small or invalid -> skip normalization, only subtract the
+            # Note: mean, to prevent division by zero that would produce NaN.
+            #    Note: 0  NaN
             adv_std = torch.ones_like(adv_std)
         self.advantages = (self.advantages - self.advantages.mean()) / (adv_std + 1e-8)
         self.advantages = torch.nan_to_num(self.advantages, nan=0.0, posinf=0.0, neginf=0.0)
@@ -208,7 +203,7 @@ class RolloutStorage:
     def get_statistics(self):
         """Get trajectory statistics.
 
-        获取轨迹统计信息。
+
         """
         done = self.dones
         done[-1] = 1
@@ -222,12 +217,12 @@ class RolloutStorage:
     def mini_batch_generator(self, num_mini_batches, num_epochs=8):
         """
         Generate mini-batches for training.
-        生成训练用的小批量数据。
+
         """
         batch_size = self.num_envs * self.num_transitions_per_env
         mini_batch_size = batch_size // num_mini_batches
 
-        flattened_data = self._flatten_buffers()
+        flattened_data = self._wk_flatten_buffers()
 
         for epoch in range(num_epochs):
             indices = torch.randperm(num_mini_batches * mini_batch_size, requires_grad=False, device=self.device)
@@ -235,7 +230,7 @@ class RolloutStorage:
                 start = i * mini_batch_size
                 end = (i + 1) * mini_batch_size
                 batch_idx = indices[start:end]
-                yield self._create_mini_batch(flattened_data, batch_idx)
+                yield self._wk_create_mini_batch(flattened_data, batch_idx)
 
     def recurrent_mini_batch_generator(self, num_mini_batches, num_epochs=8):
         """
@@ -251,12 +246,12 @@ class RolloutStorage:
             env_perm = torch.randperm(self.num_envs, requires_grad=False, device=self.device)[:usable_envs]
             for i in range(num_mini_batches):
                 env_ids = env_perm[i * envs_per_batch : (i + 1) * envs_per_batch]
-                yield self._create_recurrent_mini_batch(env_ids)
+                yield self._wk_create_recurrent_mini_batch(env_ids)
 
-    def _flatten_buffers(self):
+    def _wk_flatten_buffers(self):
         """Flatten all buffer tensors for batch generation.
 
-        将所有缓冲区张量展平以用于生成 batch。
+         batch
         """
         observations = self.observations.flatten(0, 1)
         critic_observations = (
@@ -274,10 +269,10 @@ class RolloutStorage:
             "old_sigma": self.sigma.flatten(0, 1),
         }
 
-    def _create_mini_batch(self, flattened_data, batch_idx):
+    def _wk_create_mini_batch(self, flattened_data, batch_idx):
         """Create a mini-batch from flattened data using batch indices.
 
-        根据 batch_idx 从展平数据中创建一个 mini-batch。
+         batch_idx  mini-batch
         """
         return (
             flattened_data["observations"][batch_idx],
@@ -289,15 +284,13 @@ class RolloutStorage:
             flattened_data["old_actions_log_prob"][batch_idx],
             flattened_data["old_mu"][batch_idx],
             flattened_data["old_sigma"][batch_idx],
-            # hidden states placeholder
-            # 隐藏状态占位符
+            # Note: hidden states placeholder
             (None, None),
-            # masks placeholder
-            # 掩码占位符
+            # Note: masks placeholder
             None,
         )
 
-    def _create_recurrent_mini_batch(self, env_ids):
+    def _wk_create_recurrent_mini_batch(self, env_ids):
         observations = self.observations[:, env_ids]
         critic_observations = (
             self.privileged_observations[:, env_ids]
@@ -327,3 +320,7 @@ class RolloutStorage:
             hidden_states,
             masks,
         )
+
+
+RolloutStorage = WkRolloutStorage
+Transition = WkRolloutStorage.WkRolloutTransition

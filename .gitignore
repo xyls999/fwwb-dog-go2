@@ -1,3 +1,7 @@
 codex_rpc_bridge_runtime/
 __pycache__/
 *.pyc
+.codex_tmp/
+.playwright-mcp/
+logs_analysis/
+*.zip

@@ -140,13 +140,14 @@ def smooth_follow_camera_view(
 def _get_algo_feature():
     """Dynamically import feature classes based on KAIWU_ALGORITHM env var.
 
-    根据 KAIWU_ALGORITHM 环境变量动态加载对应算法的 feature 模块，
-    避免 tools/base_env 硬编码依赖 agent_ppo。支持 agent_ppo / agent_diy。
+    根据 KAIWU_ALGORITHM 环境变量动态加载当前保留的 PPO feature 模块。
 
     Returns:
         tuple: (CriticObservationProcess, PolicyObservationProcess, RewardProcess)
     """
     algo = os.environ.get("KAIWU_ALGORITHM", "ppo")
+    if algo != "ppo":
+        raise ValueError(f"Unsupported algorithm '{algo}'. This cleaned project keeps only PPO.")
     module_name = f"agent_{algo}.feature"
     import importlib
 
@@ -154,8 +155,8 @@ def _get_algo_feature():
     return module.CriticObservationProcess, module.PolicyObservationProcess, module.RewardProcess
 
 
-# Logger: try KaiwuLogger first, fall back to simple print
-# 日志: 优先使用 KaiwuLogger，不可用时回退到简易日志
+# Note: Logger: try KaiwuLogger first, fall back to simple print
+# 说明：日志: 优先采用 KaiwuLogger，不可用时回退到简易日志
 try:
     from common_python.logging.kaiwu_logger import KaiwuLogger
     from common_python.config.config_control import CONFIG
@@ -165,15 +166,15 @@ except ImportError:
     _HAS_KAIWU_LOGGER = False
 
 
-# ======================================================================
-# Isaac Lab 要求: 必须在导入任何 Isaac Sim 模块之前启动 SimulationApp。
-# AppLauncher 的生命周期由 Robot 实例管理。
-# ======================================================================
+# ----------------------------------------------------------------------
+# 说明：Isaac Lab 要求: 必须在导入任何 Isaac Sim 模块之前启动 SimulationApp。
+# 说明：AppLauncher 的生命周期由 Robot 实例管理。
+# ----------------------------------------------------------------------
 
 
-# ------------------------------------------------------------------
-# 注册 unitree_rl_lab 的任务（需要在 SimulationApp 启动之后执行）
-# ------------------------------------------------------------------
+# ==================================================================
+# 说明：挂载 unitree_rl_lab 的任务（需要在 SimulationApp 启动之后执行）
+# ==================================================================
 def _register_tasks():
     """导入 unitree_rl_lab 任务注册模块。
 
@@ -204,9 +205,9 @@ def _register_tasks():
         sys.path.pop(0)
 
 
-# ======================================================================
-# 简易 Logger —— 替代 KaiwuLogger（外部平台依赖，独立运行时不可用）
-# ======================================================================
+# ----------------------------------------------------------------------
+# 说明：简易 Logger —— 替代 KaiwuLogger（外部赛题环境依赖，独立运行时不可用）
+# ----------------------------------------------------------------------
 class _SimpleLogger:
     """兼容 KaiwuLogger 接口的简易日志。"""
 
@@ -249,9 +250,9 @@ def _configure_terrain_curriculum_behavior(
     standard_static_grid = normalized_mode == "standard" and not curriculum_enabled and not is_eval_mode
 
     if standard_static_grid:
-        # In standard mode, monitor difficulty labels are based on terrain_levels (rows).
-        # Keep deterministic row→difficulty / col→sub-terrain generation, but disable
-        # runtime promotion/demotion below. Reset will uniformly resample rows.
+        # Note: In standard mode, monitor difficulty labels are based on terrain_levels (rows).
+        # Note: Retain deterministic row→difficulty / col→sub-terrain generation, but turn off
+        # Note: runtime promotion/demotion below. Clear will uniformly resample rows.
         tg.curriculum = True
         scene_terrain.randomize_terrain_levels_on_reset = True
         scene_terrain.terrain_level_sampling_mode = "uniform"
@@ -368,30 +369,30 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                 setattr(target, key, coerced_value)
             _log(f"[{child_path}] Set value={coerced_value}")
 
-    # ------------------------------------------------------------------
-    # [terrain] → env_cfg.scene.terrain
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # Note: [terrain] → env_cfg.scene.terrain
+    # ==================================================================
     terrain_conf = usr_conf.get("terrain", {})
     if terrain_conf and hasattr(env_cfg, "scene") and hasattr(env_cfg.scene, "terrain"):
         scene_terrain = env_cfg.scene.terrain
 
-        # --- mode: "standard" / "track" / "plane" ---
-        # "standard" or "track" → terrain_type="generator" and swap terrain_generator
-        # "plane" (or legacy mesh_type="plane") → terrain_type="plane"
+        # Note: --- mode: "standard" / "track" / "plane" ---
+        # Note: "standard" or "track" → terrain_type="generator" and swap terrain_generator
+        # Note: "plane" (or legacy mesh_type="plane") → terrain_type="plane"
         mode = terrain_conf.get("mode")
         mesh_type = terrain_conf.get("mesh_type")
 
         if mode is not None:
             if mode == "plane":
                 scene_terrain.terrain_type = "plane"
-                # Disable terrain_levels curriculum — TerrainImporter has no terrain_levels for plane
+                # Note: Turn off terrain_levels curriculum — TerrainImporter has no terrain_levels for plane
                 if hasattr(env_cfg, "curriculum") and hasattr(env_cfg.curriculum, "terrain_levels"):
                     env_cfg.curriculum.terrain_levels = None
                     _log("[terrain] Disabled curriculum.terrain_levels (plane mode)")
                 _log("[terrain] Set terrain_type='plane' (mode=plane)")
             elif mode in ("standard", "track"):
                 scene_terrain.terrain_type = "generator"
-                # Swap terrain_generator to the matching pre-defined config
+                # Note: Swap terrain_generator to the matching pre-defined config
                 from unitree_rl_lab.tasks.locomotion.robots.go2.velocity_env_cfg import (
                     STANDARD_TERRAIN_CFG,
                     TRACK_TERRAIN_CFG,
@@ -403,7 +404,7 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                     scene_terrain.terrain_generator = copy.deepcopy(TRACK_TERRAIN_CFG)
                 _log(f"[terrain] Set terrain_type='generator', mode='{mode}'")
 
-                # Switch reset function for track mode: spawn at track start
+                # Note: Switch clear function for track mode: spawn at track start
                 if mode == "track" and hasattr(env_cfg, "events") and hasattr(env_cfg.events, "reset_base"):
                     from unitree_rl_lab.tasks.locomotion.mdp.events import reset_root_state_track_start
 
@@ -412,10 +413,10 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
             else:
                 _log(f"[terrain] Unknown mode='{mode}', skipping terrain_type change")
         elif mesh_type is not None:
-            # Legacy: mesh_type="plane" → terrain_type="plane", others → "generator"
+            # Note: Legacy: mesh_type="plane" → terrain_type="plane", others → "generator"
             if mesh_type == "plane":
                 scene_terrain.terrain_type = "plane"
-                # Disable terrain_levels curriculum — TerrainImporter has no terrain_levels for plane
+                # Note: Turn off terrain_levels curriculum — TerrainImporter has no terrain_levels for plane
                 if hasattr(env_cfg, "curriculum") and hasattr(env_cfg.curriculum, "terrain_levels"):
                     env_cfg.curriculum.terrain_levels = None
                     _log("[terrain] Disabled curriculum.terrain_levels (plane mode)")
@@ -424,25 +425,25 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                 scene_terrain.terrain_type = "generator"
                 _log(f"[terrain] Set terrain_type='generator' (legacy mesh_type={mesh_type})")
 
-        # --- Generator-level parameters (only if terrain_generator exists) ---
+        # Note: --- Generator-level parameters (only if terrain_generator exists) ---
         tg = scene_terrain.terrain_generator
         if tg is not None:
-            # seed: evaluation transfers env_conf.seed to terrain_generator.seed
-            # so the platform can fully control evaluation randomness
-            # (terrain tile layout is reproducible under the platform-assigned seed).
-            # Training skips this transfer; terrain_generator.seed stays None
-            # and IsaacLab falls back to numpy's global RNG state, so training
-            # terrain tile layout is not locked to env_conf.seed.
-            # seed：评估模式将 env_conf.seed 透传给 terrain_generator.seed，
-            # 让平台能完全控制评估阶段的随机性（在平台指定的 seed 下地形瓦片布局可复现）。
-            # 训练模式跳过透传，terrain_generator.seed 保持 None，
-            # 由 IsaacLab 回退到 numpy 全局 RNG 状态，训练阶段地形瓦片布局不被 env_conf.seed 锁定。
+            # Note: seed: evaluation transfers env_conf.seed to terrain_generator.seed
+            # Note: so the platform can fully control evaluation randomness
+            # Note: (terrain tile layout is reproducible under the platform-assigned seed).
+            # Note: Training skips this transfer; terrain_generator.seed stays None
+            # Note: and IsaacLab falls back to numpy's global RNG state, so training
+            # Note: terrain tile layout is not locked to env_conf.seed.
+            # 说明：seed：测评模式将 env_conf.seed 透传给 terrain_generator.seed，
+            # 说明：让赛题环境能完全控制测评阶段的随机化性（在赛题环境指定的 seed 下赛道地貌瓦片布局可复现）。
+            # 说明：学习模式跳过透传，terrain_generator.seed 维持 None，
+            # 说明：由 IsaacLab 回退到 numpy 全局 RNG 状态，学习阶段赛道地貌瓦片布局不被 env_conf.seed 锁定。
             is_eval_for_seed = bool(usr_conf.get("is_eval", False))
             if is_eval_for_seed:
-                # Terrain seed must come from the platform-assigned seed (stable across rounds),
-                # NOT from env_cfg.seed which is randomized per run in eval mode.
-                # 地形 seed 必须来自平台下发的稳定 seed（每轮相同），
-                # 不能回退到 env_cfg.seed —— 后者在评估模式下每轮随机。
+                # Note: Terrain seed must come from the platform-assigned seed (steady across rounds),
+                # Note: NOT from env_cfg.seed which is randomized per run in eval mode.
+                # 说明：赛道地貌 seed 必须来自赛题环境下发的平稳 seed（每轮相同），
+                # 说明：不能回退到 env_cfg.seed —— 后者在测评模式下每轮随机化。
                 terrain_seed = terrain_conf.get(
                     "seed", usr_conf.get("env_conf", {}).get("seed", getattr(env_cfg, "seed", None))
                 )
@@ -450,16 +451,16 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                     tg.seed = int(terrain_seed)
                     _log(f"[terrain] Eval mode: set terrain_generator.seed={tg.seed}")
 
-                # env_cfg.seed uses RANDOM_SEED env var injected by start_eval.sh:
-                #   race mode : owner_id*100 + round_index (differs per round)
-                #   non-race  : millisecond timestamp (differs per run)
-                # Mask to 31 bits: numpy / IsaacLab's np.random.seed() only accepts [0, 2^32-1];
-                # millisecond timestamps are ~10^13 which exceeds the limit.
-                # env_cfg.seed 使用 start_eval.sh 注入的 RANDOM_SEED 环境变量：
-                #   比赛模式：owner_id*100 + round_index，每轮不同
-                #   非比赛 ：毫秒时间戳，每次启动不同
-                # 掩码截到 31 位：numpy / IsaacLab 的 np.random.seed() 只接受 [0, 2^32-1]，
-                # 而毫秒时间戳约 10^13，会超限导致 ValueError。
+                # Note: env_cfg.seed uses RANDOM_SEED env var injected by start_eval.sh:
+                #   Note: race mode : owner_id*100 + round_index (differs per round)
+                #   Note: non-race  : millisecond timestamp (differs per run)
+                # Note: Mask to 31 bits: numpy / IsaacLab's np.random.seed() only accepts [0, 2^32-1];
+                # Note: millisecond timestamps are ~10^13 which exceeds the limit.
+                # 说明：env_cfg.seed 采用 start_eval.sh 注入的 RANDOM_SEED 环境变量：
+                #   说明：比赛模式：owner_id*100 + round_index，每轮不同
+                #   说明：非比赛 ：毫秒时间戳，每次启动不同
+                # 说明：掩码截到 31 位：numpy / IsaacLab 的 np.random.seed() 只接受 [0, 2^32-1]，
+                # 说明：而毫秒时间戳约 10^13，会超限导致 ValueError。
                 env_cfg.seed = _resolve_random_seed() & 0x7FFFFFFF
                 _log(
                     f"[seed] Eval mode: terrain_seed={terrain_seed} (stable), "
@@ -468,25 +469,25 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
             else:
                 _log("[terrain] Train mode: skip terrain_generator.seed transfer (keep None, use global RNG state)")
 
-            # num_rows
+            # Note: num_rows
             num_rows = terrain_conf.get("num_rows")
             if num_rows is not None:
                 tg.num_rows = int(num_rows)
                 _log(f"[terrain] Set terrain_generator.num_rows={num_rows}")
 
-            # num_cols
+            # Note: num_cols
             num_cols = terrain_conf.get("num_cols")
             if num_cols is not None:
                 tg.num_cols = int(num_cols)
                 _log(f"[terrain] Set terrain_generator.num_cols={num_cols}")
 
-            # difficulty_range
+            # Note: difficulty_range
             diff_range = terrain_conf.get("difficulty_range")
             if diff_range is not None and isinstance(diff_range, (list, tuple)) and len(diff_range) == 2:
                 tg.difficulty_range = (float(diff_range[0]), float(diff_range[1]))
                 _log(f"[terrain] Set terrain_generator.difficulty_range={tg.difficulty_range}")
 
-            # curriculum
+            # Note: curriculum
             curriculum = terrain_conf.get("curriculum")
             if curriculum is not None:
                 _configure_terrain_curriculum_behavior(
@@ -499,34 +500,34 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                     log=_log,
                 )
 
-            # --- [terrain.standard] sub-terrain parameters ---
-            # Passthrough ALL user-specified attributes to sub-terrain Cfg objects.
-            # 透传用户在 TOML 中指定的所有子地形属性到对应的 Cfg 对象。
+            # Note: --- [terrain.standard] sub-terrain parameters ---
+            # Note: Passthrough ALL user-specified attributes to sub-terrain Cfg objects.
+            # 说明：透传用户在 TOML 中指定的所有子赛道地貌属性到对应的 Cfg 对象。
             #
-            # If user specifies ANY sub-terrain proportions, first zero out ALL
-            # sub-terrains to avoid Isaac Lab defaults leaking through.
-            # 如果用户指定了任何子地形比例，先将所有子地形清零，
-            # 防止 Isaac Lab 默认值残留。
+            # Note: If user specifies ANY sub-terrain proportions, first zero out ALL
+            # Note: sub-terrains to prevent Isaac Lab defaults leaking through.
+            # 说明：如果用户指定了任何子赛道地貌比例，先将所有子赛道地貌清零，
+            # 说明：防止 Isaac Lab 预设值残留。
             standard_conf = terrain_conf.get("standard", {})
             if standard_conf and hasattr(tg, "sub_terrains") and tg.sub_terrains:
-                # Check if any proportion is specified
-                # `sub_terrains` (list form, eval-only) is NOT a per-terrain dict, skip it here
-                # `sub_terrains` (列表形式，仅评估) 不是 per-terrain dict，跳过
+                # Note: Check if any proportion is specified
+                # Note: `sub_terrains` (list form, eval-only) is NOT a per-terrain dict, skip it here
+                # 说明：`sub_terrains` (列表形式，仅测评) 不是 per-terrain dict，跳过
                 has_proportion = any(
                     k != "sub_terrains" and isinstance(v, dict) and "proportion" in v for k, v in standard_conf.items()
                 )
                 if has_proportion:
-                    # Zero out all sub-terrains first
+                    # Note: Zero out all sub-terrains first
                     for sub_name, sub_cfg in tg.sub_terrains.items():
                         if hasattr(sub_cfg, "proportion"):
                             sub_cfg.proportion = 0.0
                     _log("[terrain.standard] Zeroed all sub-terrain proportions before applying user config")
 
-                # Apply user-specified attributes (proportion + all other params)
-                # 透传用户指定的所有属性（proportion + 其他参数）
+                # Note: Apply user-specified attributes (proportion + all other params)
+                # 说明：透传用户指定的所有属性（proportion + 其他参数）
                 for sub_name, sub_params in standard_conf.items():
-                    # Skip non-dict keys (e.g. 'sub_terrains' list form, eval-only)
-                    # 跳过非 dict 字段（如评估专用的 'sub_terrains' 列表）
+                    # Note: Skip non-dict keys (e.g. 'sub_terrains' list form, eval-only)
+                    # 说明：跳过非 dict 字段（如测评专用的 'sub_terrains' 列表）
                     if not isinstance(sub_params, dict):
                         continue
                     if sub_name not in tg.sub_terrains:
@@ -542,8 +543,8 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                             )
                             continue
 
-                        # Type coercion: TOML arrays → tuples (Isaac Lab @configclass uses tuples)
-                        # 类型转换：TOML 数组 → 元组（Isaac Lab @configclass 使用 tuple）
+                        # Note: Type coercion: TOML arrays → tuples (Isaac Lab @configclass uses tuples)
+                        # 说明：类型转换：TOML 数组 → 元组（Isaac Lab @configclass 采用 tuple）
                         original = getattr(sub_cfg, param_key)
                         if isinstance(param_val, list):
                             if isinstance(original, tuple):
@@ -564,32 +565,32 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                         setattr(sub_cfg, param_key, param_val)
                         _log(f"[terrain.standard.{sub_name}] Set {param_key}={param_val}")
 
-            # --- [terrain.track] track-specific parameters ---
-            # 覆盖 TrackTerrainGeneratorCfg 的 track_length、num_parallel_tracks、
-            # sub_terrains_random、sub_terrains_order 等参数。
+            # Note: --- [terrain.track] track-specific parameters ---
+            # 说明：覆写 TrackTerrainGeneratorCfg 的 track_length、num_parallel_tracks、
+            # 说明：sub_terrains_random、sub_terrains_order 等参数。
             track_conf = terrain_conf.get("track", {})
             if track_conf and hasattr(tg, "track_length"):
-                # track_length → num_rows (X-axis, sub-terrain sequence)
+                # Note: track_length → num_rows (X-axis, sub-terrain sequence)
                 tl = track_conf.get("track_length")
                 if tl is not None:
                     tg.track_length = int(tl)
-                    tg.num_rows = int(tl)  # num_rows is overridden by track_length
+                    tg.num_rows = int(tl)  # Note: num_rows is overridden by track_length
                     _log(f"[terrain.track] Set track_length={tl} (num_rows={tl})")
 
-                # num_parallel_tracks → num_cols (Y-axis, parallel tracks)
+                # Note: num_parallel_tracks → num_cols (Y-axis, parallel tracks)
                 npt = track_conf.get("num_parallel_tracks")
                 if npt is not None:
                     tg.num_parallel_tracks = int(npt)
-                    tg.num_cols = int(npt)  # num_cols is overridden by num_parallel_tracks
+                    tg.num_cols = int(npt)  # Note: num_cols is overridden by num_parallel_tracks
                     _log(f"[terrain.track] Set num_parallel_tracks={npt} (num_cols={npt})")
 
-                # sub_terrains_random
+                # Note: sub_terrains_random
                 sr = track_conf.get("sub_terrains_random")
                 if sr is not None:
                     tg.sub_terrains_random = bool(sr)
                     _log(f"[terrain.track] Set sub_terrains_random={sr}")
 
-                # sub_terrains_order (explicit) takes priority over sub_terrains (shorthand)
+                # Note: sub_terrains_order (explicit) takes priority over sub_terrains (shorthand)
                 sto = track_conf.get("sub_terrains_order")
                 if sto is not None and isinstance(sto, list):
                     tg.sub_terrains_order = list(sto)
@@ -600,7 +601,7 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                         tg.sub_terrains_order = list(st)
                         _log(f"[terrain.track] Set sub_terrains_order={st} (from sub_terrains)")
 
-                # track_wall_enabled / track_wall_height / track_wall_thickness
+                # Note: track_wall_enabled / track_wall_height / track_wall_thickness
                 twe = track_conf.get("track_wall_enabled")
                 if twe is not None and hasattr(tg, "track_wall_enabled"):
                     tg.track_wall_enabled = bool(twe)
@@ -616,42 +617,42 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                     tg.track_wall_thickness = float(twt)
                     _log(f"[terrain.track] Set track_wall_thickness={twt}")
 
-        # max_init_terrain_level
+        # Note: max_init_terrain_level
         max_level = terrain_conf.get("max_init_terrain_level")
         if max_level is not None:
             scene_terrain.max_init_terrain_level = int(max_level)
             _log(f"[terrain] Set max_init_terrain_level={max_level}")
 
-        # ----------------------------------------------------------------------
-        # Eval-only: deterministic level-list placement
-        # 评估专用：基于 level 列表的确定性放置
-        # ----------------------------------------------------------------------
-        # When user provides `[terrain] level = [...]` in eval config:
-        # - Standard mode: num_rows = max(level)+1, num_cols = len(sub_terrains)
-        #   Sub-terrain dict is rebuilt from list (each terrain occupies one column).
-        # - Track  mode: num_parallel_tracks (=num_cols) defaults to 10 and is
-        #   auto-extended only when max(level)+1 is larger.
-        # - Curriculum is force-disabled to keep level assignment deterministic.
-        # - Stash level/sub_terrains lists onto env_cfg so the reset function can
-        #   consume them later for per-env (row, col) computation.
+        # ======================================================================
+        # Note: Eval-only: deterministic level-list placement
+        # 说明：测评专用：基于 level 列表的确定性放置
+        # ======================================================================
+        # Note: When user provides `[terrain] level = [...]` in eval config:
+        # Note: - Standard mode: num_rows = max(level)+1, num_cols = len(sub_terrains)
+        #   Note: Sub-terrain dict is rebuilt from list (each terrain occupies one column).
+        # Note: - Track  mode: num_parallel_tracks (=num_cols) defaults to 10 and is
+        #   Note: auto-extended only when max(level)+1 is larger.
+        # Note: - Curriculum is force-disabled to keep level assignment deterministic.
+        # Note: - Stash level/sub_terrains lists onto env_cfg so the clear function can
+        #   Note: consume them later for per-env (row, col) computation.
         #
-        # 当用户在评估配置里设置 `[terrain] level = [...]` 时：
-        # - Standard 模式：num_rows = max(level)+1，num_cols = len(sub_terrains)；
-        #   按 sub_terrains 列表顺序重建子地形 dict（每种 terrain 独占一列）
-        # - Track  模式：num_parallel_tracks（=num_cols）默认 10，仅当 max(level)+1 更大时自动扩展
-        # - 强制关闭 curriculum，确保 level 分配确定性
-        # - 把 level / sub_terrains 列表挂到 env_cfg 上，供 reset 函数计算 (row, col)
+        # 说明：当用户在测评设定里设置 `[terrain] level = [...]` 时：
+        # 说明：- Standard 模式：num_rows = max(level)+1，num_cols = len(sub_terrains)；
+        #   说明：按 sub_terrains 列表顺序重建子赛道地貌 dict（每种 terrain 独占一列）
+        # 说明：- Track  模式：num_parallel_tracks（=num_cols）预设 10，仅当 max(level)+1 更大时自动扩展
+        # 说明：- 显式停用 curriculum，确保 level 分配确定性
+        # 说明：- 把 level / sub_terrains 列表挂到 env_cfg 上，供 reset 函数求取 (row, col)
         is_eval = bool(usr_conf.get("is_eval", False))
         level_list = terrain_conf.get("level")
         if is_eval and level_list and isinstance(level_list, list) and tg is not None:
-            # Auto-normalize: cast to int, clamp to [0, 9], and sort ascending.
-            # Duplicates were already rejected by the validator; clamping here
-            # is defensive (e.g. when this code path is reached from tests that
-            # bypass the validator) and sorting gives a predictable placement
-            # order regardless of how the user wrote the list.
-            # 自动规整：转 int、限幅 [0, 9]、升序。
-            # 重复元素已在校验层拦截；此处 clamp 为防御性兜底（例如测试绕过校验直接调用），
-            # 排序保证放置顺序可预测。
+            # Note: Auto-normalize: cast to int, clamp to [0, 9], and sort ascending.
+            # Note: Duplicates were already rejected by the validator; clamping here
+            # Note: is defensive (e.g. when this code path is reached from tests that
+            # Note: bypass the validator) and sorting gives a predictable placement
+            # Note: order regardless of how the user wrote the list.
+            # 说明：自动规整：转 int、限幅 [0, 9]、升序。
+            # 说明：重复元素已在校验层拦截；此处 clamp 为防御性兜底（例如测试绕过校验直接调用），
+            # 说明：排序保证放置顺序可预测。
             raw_level_list = [int(v) for v in level_list]
             level_list_int = sorted(set(max(0, min(9, v)) for v in raw_level_list))
             if level_list_int != raw_level_list:
@@ -661,21 +662,21 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                 )
             max_level_required = max(level_list_int) + 1
 
-            # Stash onto env_cfg for the reset function to consume
-            # 挂到 env_cfg 上供 reset 函数消费
+            # Note: Stash onto env_cfg for the clear function to consume
+            # 说明：挂到 env_cfg 上供 reset 函数消费
             env_cfg._eval_level_list = list(level_list_int)
             _log(f"[terrain] Eval level list: {level_list_int}")
 
             if mode == "standard":
-                # Read sub_terrains list (eval-only deterministic order)
-                # 读取 sub_terrains 列表（仅评估，确定性顺序）
+                # Note: Read sub_terrains list (eval-only deterministic order)
+                # 说明：读取 sub_terrains 列表（仅测评，确定性顺序）
                 std_conf = terrain_conf.get("standard", {})
                 sub_list = std_conf.get("sub_terrains")
                 if isinstance(sub_list, list) and len(sub_list) > 0 and hasattr(tg, "sub_terrains"):
                     env_cfg._eval_sub_terrains = list(sub_list)
 
-                    # Auto-compute num_rows / num_cols
-                    # 自动计算 num_rows / num_cols
+                    # Note: Auto-evaluate num_rows / num_cols
+                    # 说明：自动求取 num_rows / num_cols
                     tg.num_rows = max_level_required
                     tg.num_cols = len(sub_list)
                     _log(
@@ -683,12 +684,12 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                         f"→ num_rows={tg.num_rows}, num_cols={tg.num_cols}"
                     )
 
-                    # Rebuild sub_terrains dict in user-specified order
-                    # Each terrain gets equal proportion (placement is deterministic
-                    # via terrain_types, so proportion only affects column generation order).
-                    # 按用户指定顺序重建 sub_terrains dict：
-                    # 每种 terrain 占等比例（实际放置由 reset 函数通过 terrain_types 控制，
-                    # proportion 只影响 Isaac Lab 生成时的列顺序）
+                    # Note: Rebuild sub_terrains dict in user-specified order
+                    # Note: Each terrain gets equal proportion (placement is deterministic
+                    # Note: via terrain_types, so proportion only affects column generation order).
+                    # 说明：按用户指定顺序重建 sub_terrains dict：
+                    # 说明：每种 terrain 占等比例（实际放置由 reset 函数通过 terrain_types 控制，
+                    # 说明：proportion 只影响 Isaac Lab 构造时的列顺序）
                     from collections import OrderedDict
 
                     new_sub_terrains = OrderedDict()
@@ -712,8 +713,8 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                         )
 
             elif mode == "track":
-                # Track: ensure num_parallel_tracks (=num_cols) covers max(level)+1
-                # Track：保证 num_parallel_tracks（=num_cols）≥ max(level)+1
+                # Note: Track: ensure num_parallel_tracks (=num_cols) covers max(level)+1
+                # 说明：Track：保证 num_parallel_tracks（=num_cols）≥ max(level)+1
                 if hasattr(tg, "num_parallel_tracks"):
                     if tg.num_parallel_tracks < max_level_required:
                         _log(
@@ -724,21 +725,21 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                         tg.num_parallel_tracks = max_level_required
                         tg.num_cols = max_level_required
 
-            # --- Keep tg.curriculum=True so Isaac Lab uses _generate_curriculum_terrains
-            #     (grid gets a FIXED col→sub_terrain mapping by cumsum(proportion);
-            #     with equal proportions and rebuilt OrderedDict, col k → k-th sub).
-            #     If we set tg.curriculum=False, Isaac Lab would call
-            #     _generate_random_terrains which independently samples each (row, col)
-            #     cell, breaking our deterministic placement. We only force-disable
-            #     *env_cfg.curriculum.terrain_levels* below to prevent Isaac Lab's
-            #     training-time level promotion/demotion from kicking in.
-            # 保留 tg.curriculum=True，让 Isaac Lab 调用 _generate_curriculum_terrains
-            # （按 cumsum(proportion) 把 col 切成固定段；加上我们把 sub_terrains 重排为
-            # 等比例的 OrderedDict，col k 严格对应第 k 个 sub_terrain）。
-            # 如果设成 False，Isaac Lab 会调 _generate_random_terrains 对每个 (row, col)
-            # 独立随机采样，会破坏我们的确定性放置。
-            # 下方 env_cfg.curriculum.terrain_levels 仍然强制置 None，避免训练期
-            # 的自动升降级逻辑干扰 reset 时写入的 row/col。
+            # Note: --- Retain tg.curriculum=True so Isaac Lab uses _generate_curriculum_terrains
+            #     Note: (grid gets a FIXED col→sub_terrain mapping by cumsum(proportion);
+            #     Note: with equal proportions and rebuilt OrderedDict, col k → k-th sub).
+            #     Note: If we set tg.curriculum=False, Isaac Lab would call
+            #     Note: _generate_random_terrains which independently samples each (row, col)
+            #     Note: cell, breaking our deterministic placement. We only force-turn off
+            #     Note: *env_cfg.curriculum.terrain_levels* below to prevent Isaac Lab's
+            #     Note: training-time level promotion/demotion from kicking in.
+            # 说明：维持 tg.curriculum=True，让 Isaac Lab 调用 _generate_curriculum_terrains
+            # 说明：（按 cumsum(proportion) 把 col 切成固定段；加上我们把 sub_terrains 重排为
+            # 说明：等比例的 OrderedDict，col k 严格对应第 k 个 sub_terrain）。
+            # 说明：如果设成 False，Isaac Lab 会调 _generate_random_terrains 对每个 (row, col)
+            # 说明：独立随机化取样，会破坏我们的确定性放置。
+            # 说明：下方 env_cfg.curriculum.terrain_levels 仍然显式置 None，尽量防止学习期
+            # 说明：的自动升降级逻辑干扰 reset 时写入的 row/col。
             if hasattr(tg, "curriculum") and not tg.curriculum:
                 tg.curriculum = True
                 _log(
@@ -755,9 +756,9 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                 if hasattr(env_cfg.curriculum, "ang_vel_cmd_levels"):
                     env_cfg.curriculum.ang_vel_cmd_levels = None
 
-            # Hook the eval-aware reset function so per-env (row, col) gets
-            # deterministically computed at every reset.
-            # 挂载评估专用的 reset 函数，每次 reset 时确定性计算 (row, col)
+            # Note: Hook the eval-aware clear function so per-env (row, col) gets
+            # Note: deterministically computed at every clear.
+            # 说明：挂载测评专用的 reset 函数，每次 reset 时确定性求取 (row, col)
             if hasattr(env_cfg, "events") and hasattr(env_cfg.events, "reset_base"):
                 from unitree_rl_lab.tasks.locomotion.mdp.events import (
                     reset_root_state_eval_level_aware,
@@ -766,9 +767,9 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                 env_cfg.events.reset_base.func = reset_root_state_eval_level_aware
                 _log("[terrain] Switched reset_base to reset_root_state_eval_level_aware (eval level list)")
 
-    # ------------------------------------------------------------------
-    # [sensors] → env_cfg.scene.<sensor_name> (RayCasterCfg)
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # Note: [sensors] → env_cfg.scene.<sensor_name> (RayCasterCfg)
+    # ==================================================================
     sensors_conf = usr_conf.get("sensors", {})
     if sensors_conf and hasattr(env_cfg, "scene"):
         scene = env_cfg.scene
@@ -781,27 +782,27 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
 
             sensor_cfg = getattr(scene, sensor_name)
 
-            # offset_pos → sensor_cfg.offset.pos
+            # Note: offset_pos → sensor_cfg.offset.pos
             offset_pos = sensor_params.get("offset_pos")
             if offset_pos is not None and isinstance(offset_pos, (list, tuple)) and len(offset_pos) == 3:
                 sensor_cfg.offset.pos = tuple(float(v) for v in offset_pos)
                 _log(f"[sensors.{sensor_name}] Set offset.pos={sensor_cfg.offset.pos}")
 
-            # pattern_resolution → sensor_cfg.pattern_cfg.resolution
+            # Note: pattern_resolution → sensor_cfg.pattern_cfg.resolution
             resolution = sensor_params.get("pattern_resolution")
             if resolution is not None:
                 sensor_cfg.pattern_cfg.resolution = float(resolution)
                 _log(f"[sensors.{sensor_name}] Set pattern_cfg.resolution={resolution}")
 
-            # pattern_size → sensor_cfg.pattern_cfg.size
+            # Note: pattern_size → sensor_cfg.pattern_cfg.size
             pattern_size = sensor_params.get("pattern_size")
             if pattern_size is not None and isinstance(pattern_size, (list, tuple)) and len(pattern_size) == 2:
                 sensor_cfg.pattern_cfg.size = [float(v) for v in pattern_size]
                 _log(f"[sensors.{sensor_name}] Set pattern_cfg.size={sensor_cfg.pattern_cfg.size}")
 
-    # ------------------------------------------------------------------
-    # [init_state] → env_cfg.scene.robot.init_state
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # Note: [init_state] → env_cfg.scene.robot.init_state
+    # ==================================================================
     init_state_conf = usr_conf.get("init_state", {})
     if init_state_conf and hasattr(env_cfg, "scene") and hasattr(env_cfg.scene, "robot"):
         robot_cfg = env_cfg.scene.robot
@@ -811,14 +812,14 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                 robot_cfg.init_state.pos = tuple(float(v) for v in pos)
                 _log(f"[init_state] Set robot init_state.pos={robot_cfg.init_state.pos}")
 
-    # ------------------------------------------------------------------
-    # [commands] / [commands.ranges] → env_cfg.commands.base_velocity
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # Note: [commands] / [commands.ranges] → env_cfg.commands.base_velocity
+    # ==================================================================
     commands_conf = usr_conf.get("commands", {})
     if commands_conf and hasattr(env_cfg, "commands") and hasattr(env_cfg.commands, "base_velocity"):
         base_vel_cmd = env_cfg.commands.base_velocity
 
-        # resampling_time → resampling_time_range (supports scalar or [min, max])
+        # Note: resampling_time → resampling_time_range (supports scalar or [min, max])
         resample_time = commands_conf.get("resampling_time")
         if resample_time is not None:
             if isinstance(resample_time, (list, tuple)) and len(resample_time) == 2:
@@ -828,23 +829,23 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                 base_vel_cmd.resampling_time_range = (float(resample_time), float(resample_time))
                 _log(f"[commands] Set resampling_time_range=({resample_time}, {resample_time})")
 
-        # heading_command
+        # Note: heading_command
         heading_cmd = commands_conf.get("heading_command")
         if heading_cmd is not None and hasattr(base_vel_cmd, "heading_command"):
             base_vel_cmd.heading_command = bool(heading_cmd)
             _log(f"[commands] Set heading_command={heading_cmd}")
 
-        # [commands.ranges] → base_velocity.ranges
+        # Note: [commands.ranges] → base_velocity.ranges
         ranges_conf = commands_conf.get("ranges", {})
         if ranges_conf and hasattr(base_vel_cmd, "ranges"):
             cmd_ranges = base_vel_cmd.ranges
 
-            # TOML name → Isaac Lab Ranges attribute name
+            # Note: TOML name → Isaac Lab Ranges attribute name
             range_mapping = {
                 "lin_vel_x": "lin_vel_x",
                 "lin_vel_y": "lin_vel_y",
                 "ang_vel_yaw": "ang_vel_z",
-                "heading": "heading",  # if exists
+                "heading": "heading",  # Note: if exists
             }
             for toml_key, attr_name in range_mapping.items():
                 val = ranges_conf.get(toml_key)
@@ -853,7 +854,7 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                         setattr(cmd_ranges, attr_name, (float(val[0]), float(val[1])))
                         _log(f"[commands.ranges] Set ranges.{attr_name}={val}")
 
-            # limit_ranges (flat_* variants)
+            # Note: limit_ranges (flat_* variants)
             if hasattr(base_vel_cmd, "limit_ranges"):
                 limit_ranges = base_vel_cmd.limit_ranges
                 limit_mapping = {
@@ -869,7 +870,7 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                             setattr(limit_ranges, attr_name, (float(val[0]), float(val[1])))
                             _log(f"[commands.ranges] Set limit_ranges.{attr_name}={val}")
 
-        # [commands.limit] → base_velocity.limit_ranges (new structured format)
+        # Note: [commands.limit] → base_velocity.limit_ranges (new structured format)
         limit_conf = commands_conf.get("limit", {})
         if limit_conf and hasattr(base_vel_cmd, "limit_ranges"):
             limit_ranges = base_vel_cmd.limit_ranges
@@ -885,7 +886,7 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                         setattr(limit_ranges, attr_name, (float(val[0]), float(val[1])))
                         _log(f"[commands.limit] Set limit_ranges.{attr_name}={val}")
 
-        # max curriculum velocities
+        # Note: max curriculum velocities
         curriculum_mapping = {
             "max_lin_vel_x_curriculum": "max_lin_vel_x",
             "max_lin_vel_y_curriculum": "max_lin_vel_y",
@@ -897,20 +898,20 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                 setattr(base_vel_cmd, attr_name, float(val))
                 _log(f"[commands] Set {attr_name}={val}")
 
-    # ------------------------------------------------------------------
-    # [domain_rand] → env_cfg.events
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # Note: [domain_rand] → env_cfg.events
+    # ==================================================================
     domain_rand_conf = usr_conf.get("domain_rand", {})
     if domain_rand_conf and hasattr(env_cfg, "events"):
         events = env_cfg.events
         enable_domain_rand = domain_rand_conf.get("enable_domain_rand", True)
 
-        # --- friction randomization → events.physics_material ---
+        # Note: --- friction randomization → events.physics_material ---
         if hasattr(events, "physics_material"):
             randomize_friction = domain_rand_conf.get("randomize_friction", False)
             if not enable_domain_rand or not randomize_friction:
-                # Disable friction randomization by using uniform range [1.0, 1.0]
-                # 禁用摩擦随机化：设置为均匀范围 [1.0, 1.0]
+                # Note: Turn off friction randomization by using uniform range [1.0, 1.0]
+                # 说明：停用摩擦随机化：设置为均匀区间 [1.0, 1.0]
                 events.physics_material.params["static_friction_range"] = (1.0, 1.0)
                 events.physics_material.params["dynamic_friction_range"] = (1.0, 1.0)
                 _log("[domain_rand] Disabled friction randomization")
@@ -926,7 +927,7 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                     events.physics_material.params["dynamic_friction_range"] = fr
                     _log(f"[domain_rand] Set friction_range={fr}")
 
-            # restitution
+            # Note: restitution
             restitution_range = domain_rand_conf.get("restitution_range")
             if restitution_range is not None and isinstance(restitution_range, (list, tuple)):
                 events.physics_material.params["restitution_range"] = (
@@ -935,7 +936,7 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                 )
                 _log(f"[domain_rand] Set restitution_range={restitution_range}")
 
-        # --- base mass randomization → events.add_base_mass ---
+        # Note: --- base mass randomization → events.add_base_mass ---
         if hasattr(events, "add_base_mass"):
             randomize_base_mass = domain_rand_conf.get("randomize_base_mass", True)
             if not enable_domain_rand or not randomize_base_mass:
@@ -950,12 +951,12 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                     )
                     _log(f"[domain_rand] Set added_mass_range={added_mass}")
 
-        # --- push robots → events.push_robot ---
+        # Note: --- push robots → events.push_robot ---
         if hasattr(events, "push_robot"):
             push_robots = domain_rand_conf.get("push_robots", False)
             if not enable_domain_rand or not push_robots:
-                # Disable push by setting velocity to 0
-                # 禁用推力：将速度设置为 0
+                # Note: Turn off push by setting speed to 0
+                # 说明：停用推力：将速率设置为 0
                 events.push_robot.params["velocity_range"] = {"x": (0.0, 0.0), "y": (0.0, 0.0)}
                 _log("[domain_rand] Disabled push_robot")
             else:
@@ -973,9 +974,9 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                     events.push_robot.interval_range_s = (min_interval, float(push_interval))
                     _log(f"[domain_rand] Set push_robot interval_range_s=({min_interval}, {push_interval})")
 
-    # ------------------------------------------------------------------
-    # [noise] → env_cfg.observations (ObsTerm noise)
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # Note: [noise] → env_cfg.observations (ObsTerm noise)
+    # ==================================================================
     noise_conf = usr_conf.get("noise", {})
     if noise_conf and hasattr(env_cfg, "observations"):
         add_noise = noise_conf.get("add_noise", True)
@@ -983,16 +984,16 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
         if hasattr(env_cfg.observations, "policy"):
             policy_obs = env_cfg.observations.policy
             if not add_noise:
-                # Disable corruption (noise) on policy observations
-                # 关闭策略观测上的噪声
+                # Note: Turn off corruption (noise) on policy observations
+                # 说明：停用策略输入观测上的噪声
                 policy_obs.enable_corruption = False
                 _log("[noise] Disabled policy observation corruption (add_noise=false)")
             else:
                 policy_obs.enable_corruption = True
                 _log("[noise] Enabled policy observation corruption (add_noise=true)")
 
-                # Apply noise levels to individual observation terms
-                # 将噪声级别应用到各个观测项
+                # Note: Apply noise levels to individual input observation terms
+                # 说明：将噪声级别应用到各个输入观测项
                 noise_level = float(noise_conf.get("noise_level", 1.0))
 
                 noise_term_mapping = {
@@ -1013,9 +1014,9 @@ def apply_usr_conf_to_env_cfg(env_cfg, usr_conf: dict, logger=None):
                             obs_term.noise = Unoise(n_min=-scaled_noise, n_max=scaled_noise)
                             _log(f"[noise] Set policy.{obs_attr} noise=±{scaled_noise}")
 
-    # ------------------------------------------------------------------
-    # [isaaclab_override] / [env_cfg_override] → raw recursive final override
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # Note: [isaaclab_override] / [env_cfg_override] → raw recursive final override
+    # ==================================================================
     for override_key in ("isaaclab_override", "env_cfg_override"):
         override_conf = usr_conf.get(override_key, {})
         if override_conf:
@@ -1096,9 +1097,9 @@ class Robot:
     内部使用 gymnasium + RslRlVecEnvWrapper 管理 Isaac Lab 环境。
     """
 
-    # ------------------------------------------------------------------
-    # 可选的任务名称列表（与 unitree_rl_lab 注册的环境 ID 对应）
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # 说明：可选的任务名称列表（与 unitree_rl_lab 挂载的环境 ID 对应）
+    # ==================================================================
     AVAILABLE_TASKS = [
         "Unitree-Go2-Velocity",
         "Unitree-H1-Velocity",
@@ -1114,8 +1115,8 @@ class Robot:
 
         self.frame_no = 0
 
-        # Logger: try KaiwuLogger first, fall back to simple print
-        # 日志: 优先使用 KaiwuLogger，不可用时回退到简易日志
+        # Note: Logger: try KaiwuLogger first, fall back to simple print
+        # 说明：日志: 优先采用 KaiwuLogger，不可用时回退到简易日志
         self.current_pid = os.getpid()
         if _HAS_KAIWU_LOGGER:
             try:
@@ -1134,12 +1135,12 @@ class Robot:
 
         self.logger.info(f"kaiwu_env start at pid {self.current_pid}")
 
-        # 总控开关: 是否强制 headless（无 GUI）模式
-        # 设为 False 时保留 DISPLAY 等环境变量，可通过 VNC 查看 GUI
+        # 说明：总控开关: 是否显式 headless（无 GUI）模式
+        # 说明：设为 False 时维持 DISPLAY 等环境变量，可通过 VNC 查看 GUI
         self.force_headless = os.environ.get("ROBOT_FORCE_HEADLESS", "1") != "0"
 
         if self.force_headless:
-            # 设置 Headless 渲染环境变量
+            # 说明：设置 Headless 渲染环境变量
             os.environ.pop("DISPLAY", None)
             os.environ["PYOPENGL_PLATFORM"] = "egl"
             os.environ["__NV_PRIME_RENDER_OFFLOAD"] = "1"
@@ -1148,35 +1149,35 @@ class Robot:
         else:
             self.logger.info("Headless 模式已关闭，保留 DISPLAY 环境变量以支持 VNC GUI 显示")
 
-        # ----------------------------------------------------------
-        # AppLauncher 延迟到 reset() 中启动，届时根据 is_eval 决定是否开启渲染
-        # ----------------------------------------------------------
+        # ==========================================================
+        # 说明：AppLauncher 延迟到 reset() 中启动，届时根据 is_eval 决定是否启用渲染
+        # ==========================================================
         self._app_launcher = None
         self._simulation_app = None
 
-        # 环境实例（仅初始化一次）
+        # 说明：环境实例（仅初始化一次）
         self.env = None
-        # 底层 gymnasium 环境（用于 close 时同时关闭）
+        # 说明：底层 gymnasium 环境（供 close 时同时停用）
         self._gym_env = None
 
-        # 监控上报相关
+        # 说明：监控上报相关
         self._scorer = None
         self._env_monitor = None
-        self._task_type = "track"  # 默认 track，reset 时从 usr_conf["terrain"]["task"] 更新
+        self._task_type = "track"  # 说明：预设 track，reset 时从 usr_conf["terrain"]["task"] 更新
 
         self.is_eval = False
         self.eval_write_json_file = False
         self.env_nums = 4096
 
-        # Evaluation: frame capture interval
+        # Note: Evaluation: frame capture interval
         self.capture_interval = 5
 
-        # Evaluation: video recording
+        # Note: Evaluation: video recording
         self.enable_video = False
         self.is_need_save_mp4 = False
         self.vedio_dir = None
 
-        # TiledCamera per-env video recording
+        # Note: TiledCamera per-env video recording
         self._use_tiled_camera = False
         self._tiled_video_writer = None
         camera_profile = get_default_eval_camera_profile()
@@ -1186,20 +1187,20 @@ class Robot:
         self._camera_smoothed_positions: torch.Tensor | None = None
         self._camera_smoothed_targets: torch.Tensor | None = None
 
-        # 结果文件 / 关闭流程保护
+        # 说明：结果文件 / 停用流程保护
         self._result_files_written = False
 
-        # 评估模式 per-env 单次生命跟踪：
-        # 标记每个 env 是否已经完成过一次 episode（仅评估模式使用）。
-        # 已完成的 env 后续步骤中 action 被归零，scorer 忽略其后续 episode。
+        # 说明：测评模式 per-env 单次生命跟踪：
+        # 说明：标记每个 env 是否已经完成过一次 episode（仅测评模式采用）。
+        # 说明：已完成的 env 后续步骤中 action 被归零，scorer 忽略其后续 episode。
         self._eval_env_done_mask: torch.Tensor | None = None
 
-        # 目标点可视化 marker（仅非 headless 模式使用）
+        # 说明：终点点可视化 marker（仅非 headless 模式采用）
         self._goal_markers = None
 
-    # ------------------------------------------------------------------
-    # 内部: 启动 Isaac Sim SimulationApp
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # 说明：内部: 启动 Isaac Sim SimulationApp
+    # ==================================================================
     def _launch_sim_app(self, enable_cameras: bool = False):
         """启动 Isaac Sim SimulationApp（幂等，仅执行一次）。
 
@@ -1217,9 +1218,9 @@ class Robot:
         AppLauncher.add_app_launcher_args(parser)
         args_cli, _ = parser.parse_known_args()
 
-        # 根据总控开关决定是否 headless
+        # 说明：根据总控开关决定是否 headless
         args_cli.headless = self.force_headless
-        # 仅评估录视频时启用 cameras（offscreen rendering）
+        # 说明：仅测评录视频时启用 cameras（offscreen rendering）
         args_cli.enable_cameras = enable_cameras
 
         self._app_launcher = AppLauncher(args_cli)
@@ -1231,9 +1232,9 @@ class Robot:
         self._camera_smoothed_positions = None
         self._camera_smoothed_targets = None
 
-    # ------------------------------------------------------------------
-    # 内部: 创建 Isaac Lab 环境
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # 说明：内部: 创建 Isaac Lab 环境
+    # ==================================================================
     def _create_env(self, task_name: str, env_cfg, reward_configs: dict | None = None):
         """独立环境初始化 —— 仅在首次调用时真正创建。"""
 
@@ -1244,12 +1245,12 @@ class Robot:
 
         from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
 
-        # 视频录制目录
+        # 说明：视频录制目录
         if self.enable_video:
             self.vedio_dir = f"/workspace/battle/{self.game_id}/mp4"
             os.makedirs(self.vedio_dir, exist_ok=True)
 
-        # ---- TiledCamera: 评估模式且 num_envs <= 16 时启用 per-env 跟随摄像机 ----
+        # 说明：---- TiledCamera: 测评模式且 num_envs <= 16 时启用 per-env 跟随摄像机 ----
         self._use_tiled_camera = self.enable_video and env_cfg.scene.num_envs <= 16
         if self._use_tiled_camera:
             from isaaclab.sensors import TiledCameraCfg
@@ -1260,8 +1261,8 @@ class Robot:
                 target_offset=self._camera_target_offset,
             )
 
-            # TiledCamera 会按 env 自动克隆一台相机；这里只定义相机 prim 和成像参数。
-            # 实际跟随位置与朝向在 _update_camera_poses() 中按每只机器狗动态设置。
+            # 说明：TiledCamera 会按 env 自动克隆一台相机；这里只定义相机 prim 和成像参数。
+            # 说明：实际跟随位置与朝向在 _update_camera_poses() 中按每只机器狗动态设置。
             env_cfg.scene.tiled_camera = TiledCameraCfg(
                 prim_path="{ENV_REGEX_NS}/FollowCamera",
                 offset=TiledCameraCfg.OffsetCfg(
@@ -1289,29 +1290,29 @@ class Robot:
                 f"smoothing_alpha={self._camera_smoothing_alpha:.2f}"
             )
 
-        # ---- Register custom observation processes (policy / critic) ----
-        # ---- 注册自定义观测处理器（policy / critic）----
+        # Note: ---- Attach custom input observation processes (policy / critic) ----
+        # 说明：---- 挂载自定义输入观测处理器（policy / critic）----
         register_observation_processes(env_cfg)
 
-        # ---- Register all rewards from TOML config (full override) ----
-        # ---- 从 TOML 配置全量注册奖励（全量覆盖）----
+        # Note: ---- Attach all rewards from TOML config (full override) ----
+        # 说明：---- 从 TOML 设定全量挂载回报（全量覆写）----
         if reward_configs:
             _, _, RewardProcess = _get_algo_feature()
             reward_process = RewardProcess()
             bridge = reward_process.create_bridge_from_configs(reward_configs)
             bridge.register_to_env_cfg(env_cfg)
 
-        # 创建 gymnasium 环境
+        # 说明：创建 gymnasium 环境
         self._gym_env = gym.make(task_name, cfg=env_cfg, render_mode=None)
 
-        # 挂载 is_eval 标志到底层 env，供 reset 函数等识别训练/评估模式
-        # reset_root_state_track_start 据此决定 spawn 策略：
-        #   - 训练时: 在非 maze 段中随机生成
-        #   - 评估时: 固定在赛道起点生成
+        # 说明：挂载 is_eval 标志到底层 env，供 reset 函数等识别学习/测评模式
+        # 说明：reset_root_state_track_start 据此决定 spawn 策略：
+        #   说明：- 学习时: 在非 maze 段中随机化构造
+        #   说明：- 测评时: 固定在赛道起点构造
         self._gym_env.unwrapped._is_eval = bool(self.is_eval)
 
-        # 设置地形块边界终止开关（仅评估模式 + 配置启用时生效）
-        # 训练时默认关闭，避免正常速度跟踪被频繁截断
+        # 说明：设置赛道地貌块边界结束开关（仅测评模式 + 设定启用时生效）
+        # 说明：学习时预设停用，尽量防止正常速率跟踪被频繁截断
         enable_bounds_term = self.is_eval and self.usr_conf.get("custom_parameters", {}).get(
             "enable_terrain_bounds_termination", True
         )
@@ -1320,20 +1321,20 @@ class Robot:
         if enable_bounds_term:
             self.logger.info("[terrain_bounds] 地形块边界终止已启用（评估模式）")
 
-        # TiledCamera 方案：初始化 per-env 视频写入器
+        # 说明：TiledCamera 方案：初始化 per-env 视频写入器
         if self._use_tiled_camera:
             from tools.base_env.video_writer import TiledCameraVideoWriter
 
             fps = 1.0 / (env_cfg.sim.dt * env_cfg.decimation)
-            # Defer terrain-name resolution to the first frame write:
-            # at __init__ time Isaac Lab's `terrain.terrain_types` may still be
-            # zero-filled (real assignment happens during the first env reset via
-            # events like `reset_robot_track_pose`). Resolving here would produce
-            # wrong mp4 prefixes.
-            # 延迟到首次写帧时再解析 env 地形名：__init__ 阶段 Isaac Lab 的
-            # terrain_types 可能还是初始化零值（真实分配发生在首次 env reset 时的
-            # reset event 中），此时解析会导致 mp4 前缀错位（例如把 stairs_inv 的
-            # env 命名成 maze）。
+            # Note: Defer terrain-name resolution to the first frame write:
+            # Note: at __init__ time Isaac Lab's `terrain.terrain_types` may still be
+            # Note: zero-filled (real assignment happens during the first env clear via
+            # Note: events like `reset_robot_track_pose`). Resolving here would produce
+            # Note: wrong mp4 prefixes.
+            # 说明：延迟到首次写帧时再解析 env 赛道地貌名：__init__ 阶段 Isaac Lab 的
+            # 说明：terrain_types 可能还是初始化零值（真实分配发生在首次 env reset 时的
+            # 说明：reset event 中），此时解析会导致 mp4 前缀错位（例如把 stairs_inv 的
+            # 说明：env 命名成 maze）。
             self._tiled_video_writer = TiledCameraVideoWriter(
                 video_dir=self.vedio_dir,
                 fps=fps,
@@ -1341,24 +1342,24 @@ class Robot:
                 env_terrain_names=None,
             )
 
-        # RSL-RL 向量化环境封装
+        # 说明：RSL-RL 向量化环境封装
         self.env = RslRlVecEnvWrapper(self._gym_env)
 
-        # 设备信息
+        # 说明：设备信息
         self.sim_device = env_cfg.sim.device if hasattr(env_cfg.sim, "device") else "cuda"
         self.frame_no = 1
         self.env_nums = env_cfg.scene.num_envs
 
-        # 动作维度
+        # 说明：动作维度
         action_space = self.env.action_space
         self.num_actions = action_space.shape[-1] if hasattr(action_space, "shape") else 12
 
-        # 初始化监控上报
+        # 说明：初始化监控上报
         self._init_monitor()
 
-    # ------------------------------------------------------------------
-    # 内部: TiledCamera 位置更新 + 帧写入
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # 说明：内部: TiledCamera 位置更新 + 帧写入
+    # ==================================================================
     def _resolve_env_terrain_names(self) -> list[str] | None:
         """解析每个 env 当前所在的子地形名称（带 level 标签），用于给 mp4 文件命名。
 
@@ -1386,7 +1387,7 @@ class Robot:
         try:
             env_unwrapped = self._gym_env.unwrapped
             terrain = env_unwrapped.scene.terrain
-            # plane 模式没有 generator
+            # 说明：plane 模式没有 generator
             terrain_gen_cfg = getattr(terrain.cfg, "terrain_generator", None)
             if terrain_gen_cfg is None:
                 return None
@@ -1396,7 +1397,7 @@ class Robot:
                 return None
             sub_names = list(sub_terrains.keys())
 
-            # 每个 env 在 terrain grid 中的列索引（col）；没有则无法判断地形
+            # 说明：每个 env 在 terrain grid 中的列索引（col）；没有则无法判定赛道地貌
             terrain_types = getattr(terrain, "terrain_types", None)
             terrain_levels = getattr(terrain, "terrain_levels", None)
             if terrain_types is None:
@@ -1410,23 +1411,23 @@ class Robot:
 
             num_envs = env_unwrapped.scene.num_envs
 
-            # --------------------------------------------------------------
-            # Priority 1: Eval level list mode — deterministic per-env naming
-            # 优先路径：eval level 列表模式，按 (row=level, col→sub) 精确命名
-            # --------------------------------------------------------------
+            # ==============================================================
+            # Note: Priority 1: Eval level list mode — deterministic per-env naming
+            # 说明：优先路径：eval level 列表模式，按 (row=level, col→sub) 精确命名
+            # ==============================================================
             env_cfg = getattr(env_unwrapped, "cfg", None)
             eval_level_list = getattr(env_cfg, "_eval_level_list", None) if env_cfg is not None else None
             eval_sub_terrains = getattr(env_cfg, "_eval_sub_terrains", None) if env_cfg is not None else None
 
-            # Track 模式：同一列是多个子地形顺序拼成的赛道（按 row 变化）
-            # 命名用整条赛道的子地形序列拼起来，方便识别。
+            # 说明：Track 模式：同一列是多个子赛道地貌顺序拼成的赛道（按 row 变化）
+            # 说明：命名用整条赛道的子赛道地貌序列拼起来，方便识别。
             track_length = getattr(terrain_gen_cfg, "track_length", None)
             is_track_mode = track_length is not None and track_length > 0
 
             if eval_level_list:
                 if is_track_mode:
-                    # Track: row=0, col=level; use the chained sub_terrains sequence
-                    # Track：row=0, col=level；取整条赛道的子地形链作为标签
+                    # Note: Track: row=0, col=level; apply the chained sub_terrains sequence
+                    # 说明：Track：row=0, col=level；取整条赛道的子赛道地貌链作为标签
                     order = getattr(terrain_gen_cfg, "sub_terrains_order", None)
                     if order:
                         sequence = [n for n in order if n in sub_terrains]
@@ -1442,8 +1443,8 @@ class Robot:
                         f"L{col_indices[i] if i < len(col_indices) else 0}_track_{track_label}" for i in range(num_envs)
                     ]
 
-                # Standard: each col maps 1-to-1 to a sub_terrain in the list
-                # Standard：每个 col 和 sub_terrains 列表一一对应（base_env 已重建 OrderedDict）
+                # Note: Standard: each col maps 1-to-1 to a sub_terrain in the list
+                # 说明：Standard：每个 col 和 sub_terrains 列表一一对应（base_env 已重建 OrderedDict）
                 if eval_sub_terrains:
                     names = []
                     for env_id in range(num_envs):
@@ -1453,10 +1454,10 @@ class Robot:
                         names.append(f"L{level}_{eval_sub_terrains[col]}")
                     return names
 
-            # --------------------------------------------------------------
-            # Priority 2: legacy Track mode (no eval level list)
-            # 传统 Track 模式（无 eval level 列表）
-            # --------------------------------------------------------------
+            # ==============================================================
+            # Note: Priority 2: legacy Track mode (no eval level list)
+            # 说明：传统 Track 模式（无 eval level 列表）
+            # ==============================================================
             if is_track_mode:
                 order = getattr(terrain_gen_cfg, "sub_terrains_order", None)
                 if order:
@@ -1465,37 +1466,37 @@ class Robot:
                     sequence = list(sub_names)
                 if not sequence:
                     return None
-                # 按 track_length 循环补齐
+                # 说明：按 track_length 循环补齐
                 while len(sequence) < track_length:
                     sequence.extend(sequence)
                 sequence = sequence[:track_length]
                 track_label = "-".join(sequence)
                 return [f"track_{track_label}" for _ in range(num_envs)]
 
-            # --------------------------------------------------------------
-            # Priority 3: legacy Standard curriculum=True (proportion formula)
-            # 传统 Standard curriculum=True 模式（proportion 反推）
-            # --------------------------------------------------------------
-            # Standard 模式 col → sub_terrain 映射的可用性取决于 `curriculum`：
-            #   - curriculum=True  → Isaac Lab `_generate_curriculum_terrains`
-            #     按 cumsum(proportion) 把 col 切成固定分段，下面的 proportion
-            #     公式能**精确**还原真实布局。
-            #   - curriculum=False → Isaac Lab `_generate_random_terrains`
-            #     对**每个 (row, col) 独立**按 proportion 概率采样，没有任何
-            #     固定的 col→type 映射可以反推。
+            # ==============================================================
+            # Note: Priority 3: legacy Standard curriculum=True (proportion formula)
+            # 说明：传统 Standard curriculum=True 模式（proportion 反推）
+            # ==============================================================
+            # 说明：Standard 模式 col → sub_terrain 映射的可用性取决于 `curriculum`：
+            #   Note: - curriculum=True  → Isaac Lab `_generate_curriculum_terrains`
+            #     说明：按 cumsum(proportion) 把 col 切成固定分段，下面的 proportion
+            #     说明：公式能**精确**还原真实布局。
+            #   Note: - curriculum=False → Isaac Lab `_generate_random_terrains`
+            #     说明：对**每个 (row, col) 独立**按 proportion 概率取样，没有任何
+            #     说明：固定的 col→type 映射可以反推。
             #
-            # Standard mode col→sub_terrain mapping depends on `curriculum`:
-            #   curriculum=True  → proportion formula below is exact.
-            #   curriculum=False → each (row, col) is independently sampled,
-            #                      no deterministic mapping exists.
+            # Note: Standard mode col→sub_terrain mapping depends on `curriculum`:
+            #   Note: curriculum=True  → proportion formula below is exact.
+            #   Note: curriculum=False → each (row, col) is independently sampled,
+            #                      Note: no deterministic mapping exists.
             #
-            # 为避免 curriculum=False 下产出错位的命名误导用户（例如 mp4 文件名说
-            # 是 maze 实际却是 stairs_inv），这里显式检测 curriculum 开关：一旦
-            # 为 False 且没有 eval level list 托底，立刻返回 None 让 writer 退回到
-            # 无前缀命名 `env_{id:03d}.mp4`，并打 warning 提示用户修改配置。
-            # When curriculum=False and no eval level list is present, we refuse
-            # to guess; return None so the writer falls back to prefix-less
-            # `env_{id:03d}.mp4` and emit a warning.
+            # 说明：为尽量防止 curriculum=False 下产出错位的命名误导用户（例如 mp4 文件名说
+            # 说明：是 maze 实际却是 stairs_inv），这里显式检测 curriculum 开关：一旦
+            # 说明：为 False 且没有 eval level list 托底，立刻返回 None 让 writer 退回到
+            # 说明：无前缀命名 `env_{id:03d}.mp4`，并打 warning 提示用户修改设定。
+            # Note: When curriculum=False and no eval level list is present, we refuse
+            # Note: to guess; return None so the writer falls back to prefix-less
+            # Note: `env_{id:03d}.mp4` and emit a warning.
             curriculum_on = bool(getattr(terrain_gen_cfg, "curriculum", True))
             if not curriculum_on:
                 if not getattr(self, "_curriculum_false_naming_warned", False):
@@ -1509,8 +1510,8 @@ class Robot:
                     self._curriculum_false_naming_warned = True
                 return None
 
-            # Standard 模式（curriculum=True）：复现 Isaac Lab 的 col → sub_terrain 映射
-            # Standard mode (curriculum=True): replicate Isaac Lab's col→sub_terrain mapping
+            # 说明：Standard 模式（curriculum=True）：复现 Isaac Lab 的 col → sub_terrain 映射
+            # Note: Standard mode (curriculum=True): replicate Isaac Lab's col→sub_terrain mapping
             import numpy as np
 
             proportions = np.array([cfg.proportion for cfg in sub_terrains.values()], dtype=float)
@@ -1550,7 +1551,7 @@ class Robot:
             tiled_cam = env_unwrapped.scene["tiled_camera"]
             robot = env_unwrapped.scene["robot"]
 
-            # 机器狗 root pose: (num_envs, 3) / (num_envs, 4)
+            # 说明：机器狗 root pose: (num_envs, 3) / (num_envs, 4)
             root_pos = robot.data.root_pos_w
             root_quat = robot.data.root_quat_w
             target_positions, target_targets = compute_follow_camera_view(
@@ -1569,7 +1570,7 @@ class Robot:
             self._camera_smoothed_positions = cam_positions.detach().clone()
             self._camera_smoothed_targets = cam_targets.detach().clone()
 
-            # 使用 look-at API 直接设定朝向，避免手写四元数和 convention 不一致导致镜头朝天。
+            # 说明：采用 look-at API 直接设定朝向，尽量防止手写四元数和 convention 不一致导致镜头朝天。
             tiled_cam.set_world_poses_from_view(cam_positions, cam_targets)
         except Exception as e:
             self.logger.error(f"TiledCamera 位置更新异常: {e}")
@@ -1591,30 +1592,30 @@ class Robot:
         try:
             env_unwrapped = self._gym_env.unwrapped
             tiled_cam = env_unwrapped.scene["tiled_camera"]
-            # output["rgb"] shape: (num_envs, H, W, 3) or (num_envs, H, W, 4), dtype uint8
+            # Note: output["rgb"] shape: (num_envs, H, W, 3) or (num_envs, H, W, 4), dtype uint8
             rgb_data = tiled_cam.data.output["rgb"]
 
-            # Lazy-resolve env terrain names on the very first write:
-            # by now terrain.terrain_types has been populated by the first reset,
-            # so the resolved names are trustworthy for mp4 filenames.
-            # 首次写帧前懒解析 env 地形名：此时 terrain_types 已被首次 reset 事件填充，
-            # 得到的名字可靠，用于 mp4 文件名前缀。writer 的 _writers 也是 lazy init
-            # 的（见 write_frames 的 `if self._writers is None` 分支），因此只要在
-            # 首次 write_frames 调用之前补齐 _env_terrain_names 即可生效。
+            # Note: Lazy-resolve env terrain names on the very first write:
+            # Note: by now terrain.terrain_types has been populated by the first clear,
+            # Note: so the resolved names are trustworthy for mp4 filenames.
+            # 说明：首次写帧前懒解析 env 赛道地貌名：此时 terrain_types 已被首次 reset 事件填充，
+            # 说明：得到的名字可靠，供 mp4 文件名前缀。writer 的 _writers 也是 lazy init
+            # 说明：的（见 write_frames 的 `if self._writers is None` 分支），因此只要在
+            # 说明：首次 write_frames 调用之前补齐 _env_terrain_names 即可生效。
             if self._tiled_video_writer._env_terrain_names is None:
                 resolved_names = self._resolve_env_terrain_names()
                 if resolved_names is not None:
                     self._tiled_video_writer._env_terrain_names = resolved_names
-                    # 同步缓存到 base_env，供 skip_mask 的 maze 豁免逻辑复用
+                    # 说明：同步缓存到 base_env，供 skip_mask 的 maze 豁免逻辑复用
                     self._env_terrain_names_cache = resolved_names
 
-            # 获取越界 mask：仅 standard 模式下使用（scorer 的越界基于单块边界，
-            # track 模式下该语义不适用，否则会在机器人走出第一段子地形时误停录）
+            # 说明：获取越界 mask：仅 standard 模式下采用（scorer 的越界基于单块边界，
+            # 说明：track 模式下该语义不适用，否则会在机器人走出第一段子赛道地貌时误停录）
             skip_mask = None
             is_track_mode = bool(getattr(self._scorer, "_is_track_mode", False)) if self._scorer is not None else False
             if not is_track_mode and self._scorer is not None and hasattr(self._scorer, "_out_of_bounds"):
                 skip_mask = self._scorer._out_of_bounds.clone()
-                # maze 类地形的 env 不应用越界屏蔽（出口就在边界上，否则视频会是空壳）
+                # 说明：maze 类赛道地貌的 env 不应用越界屏蔽（出口就在边界上，否则视频会是空壳）
                 try:
                     names = getattr(self, "_env_terrain_names_cache", None)
                     if names is None:
@@ -1628,13 +1629,13 @@ class Robot:
                             dtype=_torch.bool,
                             device=skip_mask.device,
                         )
-                        # maze env 强制不跳过（False），非 maze env 维持原 out_of_bounds
+                        # 说明：maze env 显式不跳过（False），非 maze env 维持原 out_of_bounds
                         if maze_flags.shape[0] == skip_mask.shape[0]:
                             skip_mask = skip_mask & (~maze_flags)
                 except Exception as _e:
                     self.logger.warning(f"[video] maze 地形 skip_mask 豁免失败，退回默认行为: {_e}")
 
-            # 评估模式：已完成首次 episode 的 env 也跳过帧写入
+            # 说明：测评模式：已完成首次 episode 的 env 也跳过帧写入
             if self._eval_env_done_mask is not None:
                 if skip_mask is not None:
                     skip_mask = skip_mask | self._eval_env_done_mask
@@ -1675,10 +1676,10 @@ class Robot:
                 prim_path="/Visuals/goal_markers",
                 markers={
                     "goal": sim_utils.CylinderCfg(
-                        radius=0.6,  # 与 _goal_reached_termination threshold 一致 (0.6m)
-                        height=0.02,  # 极薄圆盘，贴地
+                        radius=0.6,  # 说明：与 _goal_reached_termination threshold 一致 (0.6m)
+                        height=0.02,  # 说明：极薄圆盘，贴地
                         visual_material=sim_utils.PreviewSurfaceCfg(
-                            diffuse_color=(0.0, 1.0, 0.0),  # 绿色
+                            diffuse_color=(0.0, 1.0, 0.0),  # 说明：绿色
                             opacity=0.6,
                         ),
                     ),
@@ -1742,17 +1743,17 @@ class Robot:
             return
 
         vis_pos = env_unwrapped.goal_positions
-        # 跳过全零（尚未初始化）
+        # 说明：跳过全零（尚未初始化）
         if vis_pos.abs().max().item() < 1e-6:
             return
 
         try:
-            # 圆盘贴地：只需抬高 0.01m 防止 z-fighting
+            # 说明：圆盘贴地：只需抬高 0.01m 防止 z-fighting
             vis_pos = vis_pos.clone()
             vis_pos[:, 2] = 0.01
             self._goal_markers.visualize(translations=vis_pos)
 
-            # 首次成功时记录日志
+            # 说明：首次成功时记录日志
             if not getattr(self, "_goal_markers_logged", False):
                 self.logger.info(
                     f"[goal_markers] 显示 env.goal_positions: {vis_pos.shape[0]} 个圆盘, "
@@ -1769,9 +1770,9 @@ class Robot:
         self._simulation_app = None
         self._app_launcher = None
 
-    # ------------------------------------------------------------------
-    # 内部: 初始化监控上报
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # 说明：内部: 初始化监控上报
+    # ==================================================================
     def _init_monitor(self):
         """创建 BaseScorer 和 EnvMonitor 实例（仅执行一次）。"""
         if self._env_monitor is not None:
@@ -1807,9 +1808,9 @@ class Robot:
             self._scorer = None
             self._env_monitor = None
 
-    # ------------------------------------------------------------------
-    # Helper: extract policy / critic obs from raw observations
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # Note: Helper: extract policy / critic obs from raw observations
+    # ==================================================================
     def _extract_obs(self, obs_raw, extras=None):
         """Extract (policy_obs, critic_obs) from raw observation data.
 
@@ -1823,18 +1824,18 @@ class Robot:
         obs = None
         critic_obs = None
 
-        # Case 1: TensorDict (Isaac Lab >= 2.3 with Dict observation space)
+        # Note: Case 1: TensorDict (Isaac Lab >= 2.3 with Dict input observation space)
         if hasattr(obs_raw, "keys") and callable(obs_raw.keys):
             if "policy" in obs_raw:
                 obs = obs_raw["policy"]
             if "critic" in obs_raw:
                 critic_obs = obs_raw["critic"]
 
-        # Case 2: plain Tensor
+        # Note: Case 2: plain Tensor
         if obs is None:
             obs = obs_raw
 
-        # Try extras for critic obs fallback
+        # Note: Try extras for critic obs fallback
         if critic_obs is None and isinstance(extras, dict):
             obs_dict = extras.get("observations", {})
             if isinstance(obs_dict, dict):
@@ -1845,9 +1846,9 @@ class Robot:
 
         return obs, critic_obs
 
-    # ------------------------------------------------------------------
-    # reset
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # Note: clear
+    # ==================================================================
     def reset(self, usr_conf):
         """Reset the environment.
 
@@ -1864,7 +1865,7 @@ class Robot:
             self.usr_conf = usr_conf
             self._result_files_written = False
 
-            # ---------- Parse configuration ----------
+            # Note: ---------- Parse configuration ----------
             env_conf = usr_conf.get("env_conf", {})
             env_section = usr_conf.get("env", {})
             terrain_section = usr_conf.get("terrain", {})
@@ -1877,36 +1878,36 @@ class Robot:
             seed = env_conf.get("seed", 0)
             use_fabric = env_conf.get("use_fabric", True)
 
-            # Task-specific parameters
+            # Note: Task-specific parameters
             task_key = f"task_{task_name.lower().replace('-', '_')}"
             task_conf = env_conf.get(task_key, {})
 
-            # Episode length
+            # Note: Episode length
             self.min_episode_length = env_conf.get("min_episode_length", task_conf.get("min_episode_length", 50))
-            # max_episode_length: prefer computing from episode_length_s (seconds → steps),
-            # fallback to explicit max_step / max_episode_length, then default 1000.
-            # dt=0.005, decimation=4 → step_dt=0.02
+            # Note: max_episode_length: prefer computing from episode_length_s (seconds → steps),
+            # Note: fallback to explicit max_step / max_episode_length, then preset 1000.
+            # Note: dt=0.005, decimation=4 → step_dt=0.02
             episode_length_s = env_section.get("episode_length_s")
             if episode_length_s is not None:
-                step_dt = 0.02  # dt(0.005) * decimation(4)
+                step_dt = 0.02  # Note: dt(0.005) * decimation(4)
                 self.max_episode_length = int(float(episode_length_s) / step_dt)
             else:
                 self.max_episode_length = env_section.get(
                     "max_step", env_conf.get("max_episode_length", task_conf.get("max_episode_length", 1000))
                 )
 
-            # Video recording — only in evaluation mode
+            # Note: Video recording — only in evaluation mode
             self.is_need_save_mp4 = bool(env_conf.get("save_mp4", False))
             self.enable_video = self.is_eval and self.is_need_save_mp4
             self._reset_camera_follow_state()
 
-            # Task type: "standard" or "track" — affects scoring and monitor reporting
+            # Note: Task type: "standard" or "track" — affects scoring and monitor reporting
             self._task_type = terrain_section.get("mode", "track").lower()
 
-            # ---------- Launch SimulationApp (lazy, idempotent) ----------
+            # Note: ---------- Launch SimulationApp (lazy, idempotent) ----------
             self._launch_sim_app(enable_cameras=self.enable_video)
 
-            # ---------- Load environment configuration ----------
+            # Note: ---------- Read environment configuration ----------
             _register_tasks()
 
             import unitree_rl_lab.tasks  # noqa: F401
@@ -1921,7 +1922,7 @@ class Robot:
             )
             env_cfg.seed = seed
 
-            # Episode length: prefer episode_length_s (seconds), fallback to max_step (steps)
+            # Note: Episode length: prefer episode_length_s (seconds), fallback to max_step (steps)
             episode_length_s = env_section.get("episode_length_s")
             if episode_length_s is not None:
                 env_cfg.episode_length_s = float(episode_length_s)
@@ -1929,45 +1930,45 @@ class Robot:
                 env_cfg.episode_length_s = self.max_episode_length * env_cfg.sim.dt * env_cfg.decimation
             reward_configs = parse_reward_configs(usr_conf)
 
-            # ---------- Apply user TOML config to env_cfg ----------
-            # 将 terrain / commands / domain_rand / noise / init_state 等配置应用到 env_cfg
+            # Note: ---------- Apply user TOML config to env_cfg ----------
+            # 说明：将 terrain / commands / domain_rand / noise / init_state 等设定应用到 env_cfg
             apply_usr_conf_to_env_cfg(env_cfg, usr_conf, logger=self.logger)
 
-            # ---------- Create environment ----------
+            # Note: ---------- Build environment ----------
             self._create_env(task_name, env_cfg, reward_configs=reward_configs)
 
-            # ---------- Evaluation mode setup ----------
+            # Note: ---------- Evaluation mode setup ----------
             if self.is_eval:
                 self.battle_dir = f"/workspace/battle/{self.game_id}"
                 os.makedirs(self.battle_dir, exist_ok=True)
                 if self.is_need_save_mp4:
                     os.makedirs(f"{self.battle_dir}/mp4", exist_ok=True)
 
-            # Record start time
+            # Note: Record start time
             self.start_timestamp = datetime.datetime.now(datetime.timezone.utc)
 
-            # ---------- Get initial observations ----------
+            # Note: ---------- Get initial observations ----------
             obs_data = self.env.get_observations()
 
-            # rsl-rl >= 2.3 returns (obs, extras)
+            # Note: rsl-rl >= 2.3 returns (obs, extras)
             if isinstance(obs_data, tuple):
                 obs_raw, extras = obs_data
             else:
                 obs_raw = obs_data
                 extras = {}
 
-            # Extract policy/critic obs
+            # Note: Extract policy/critic obs
             obs, critic_obs = self._extract_obs(obs_raw, extras)
 
             self.frame_no = 1
             self.env_nums = num_envs
             self.logger.info(f"Environment reset: obs.shape={obs.shape}, critic_obs.shape={critic_obs.shape}")
 
-            # 初始化目标点可视化（此时 goal_positions 已由 observation process 按需准备）
+            # 说明：初始化终点点可视化（此时 goal_positions 已由 observation process 按需准备）
             self._init_goal_markers()
             self._visualize_goal_markers()
 
-            # 初始化摄像机位置（第一帧）
+            # 说明：初始化摄像机位置（第一帧）
             self._update_camera_poses()
 
             return (obs, critic_obs)
@@ -1976,9 +1977,9 @@ class Robot:
             self.logger.exception("reset error")
             return None
 
-    # ------------------------------------------------------------------
-    # step
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # Note: step
+    # ==================================================================
     def step(self, actions):
         """Step the environment.
 
@@ -1992,20 +1993,20 @@ class Robot:
         try:
             self.frame_no += 1
 
-            # ------------------------------------------------------------------
-            # 评估模式 per-env 单次生命：已完成的 env 的 action 归零
-            # Isaac Lab auto-reset 后机器人会被重置，归零 action 让它原地站立不动，
-            # 这样不会产生有意义的新 episode 数据。
-            # ------------------------------------------------------------------
+            # ==================================================================
+            # 说明：测评模式 per-env 单次生命：已完成的 env 的 action 归零
+            # 说明：Isaac Lab auto-reset 后机器人会被重置，归零 action 让它原地站立不动，
+            # 说明：这样不会产生有意义的新 episode 数据。
+            # ==================================================================
             if self.is_eval and self._eval_env_done_mask is not None:
                 actions = actions.clone()
                 actions[self._eval_env_done_mask] = 0.0
 
-            # 保存 step 前快照（在 env.step 之前），
-            # Isaac Lab 的 env.step() 内部会：
-            #   1. auto-reset → episode_length_buf 清零
-            #   2. curriculum_manager.compute() → terrain_levels 更新为新 level
-            # scorer 需要 reset 前的真实值，故需在 step() 前拍快照。
+            # 说明：写出 step 前快照（在 env.step 之前），
+            # 说明：Isaac Lab 的 env.step() 内部会：
+            #   说明：1. auto-reset → episode_length_buf 清零
+            #   说明：2. curriculum_manager.compute() → terrain_levels 更新为新 level
+            # 说明：scorer 需要 reset 前的真实值，故需在 step() 前拍快照。
             pre_step_episode_lengths = None
             pre_step_terrain_levels = None
             if self._env_monitor is not None:
@@ -2018,23 +2019,23 @@ class Robot:
                 except Exception:
                     pass
 
-            # ---------- TiledCamera: step 前更新摄像机位置 ----------
+            # 说明：---------- TiledCamera: step 前更新摄像机位置 ----------
             self._update_camera_poses()
 
-            # RslRlVecEnvWrapper.step returns (obs, rewards, dones, extras)
+            # Note: RslRlVecEnvWrapper.step returns (obs, rewards, dones, extras)
             obs_raw, rewards, dones, extras = self.env.step(actions)
 
-            # ------------------------------------------------------------------
-            # Track mode: actively maintain env.goal_positions as terrain infra,
-            # independent of whether observation_process includes the goal term.
-            # This enables evaluating standard-trained (no-goal-obs) models on
-            # track terrains without scorer/termination raising on missing goals.
+            # ==================================================================
+            # Note: Track mode: actively maintain env.goal_positions as terrain infra,
+            # Note: independent of whether observation_process includes the goal term.
+            # Note: This enables evaluating standard-trained (no-goal-obs) models on
+            # Note: track terrains without scorer/termination raising on missing goals.
             #
-            # Track 模式：将 env.goal_positions 作为"地形基础设施"主动维护，
-            # 不再依赖 observation_process 是否包含 goal 相关 term 才触发更新。
-            # 支持用 standard 训练的模型（obs 里没有 goal）在 track 地形上评估，
-            # scorer / termination / reward 都能拿到有效 goal_positions。
-            # ------------------------------------------------------------------
+            # 说明：Track 模式：将 env.goal_positions 作为"赛道地貌基础设施"主动维护，
+            # 说明：不再依赖 observation_process 是否包含 goal 相关 term 才触发更新。
+            # 说明：支持用 standard 学习的模型（obs 里没有 goal）在 track 赛道地貌上测评，
+            # 说明：scorer / termination / reward 都能拿到有效 goal_positions。
+            # ==================================================================
             if self._task_type == "track":
                 try:
                     from tools.base_env.observation_process import (
@@ -2050,16 +2051,16 @@ class Robot:
                         self.logger.warning(f"[track] 主动维护 goal_positions 失败（仅首次告警）: {e}")
                         self._goal_maintain_warned = True
 
-            # Extract policy obs and critic/privileged obs
+            # Note: Extract policy obs and critic/privileged obs
             obs, privileged_obs = self._extract_obs(obs_raw, extras)
 
-            # 刷新目标点 marker；goal_positions 已在 observation 计算过程中更新
+            # 说明：刷新终点点 marker；goal_positions 已在 observation 求取过程中更新
             self._visualize_goal_markers()
 
-            # Build terminated and truncated tensors
+            # Note: Build terminated and truncated tensors
             terminated = dones.bool() if isinstance(dones, torch.Tensor) else torch.tensor(dones, dtype=torch.bool)
 
-            # Extract time_outs from extras for truncated
+            # Note: Extract time_outs from extras for truncated
             time_outs = None
             if isinstance(extras, dict):
                 time_outs = extras.get("time_outs", None)
@@ -2070,37 +2071,37 @@ class Robot:
                     if isinstance(time_outs, torch.Tensor)
                     else torch.tensor(time_outs, dtype=torch.bool)
                 )
-                # Terminated should exclude time_outs (true termination vs truncation)
+                # Note: Terminated should exclude time_outs (true termination vs truncation)
                 terminated = terminated & ~truncated
             else:
                 truncated = torch.zeros_like(terminated, dtype=torch.bool)
 
-            # ------------------------------------------------------------------
-            # 评估模式 per-env 单次生命：跟踪每个 env 的首次完成
-            # ------------------------------------------------------------------
-            # dones_for_scorer: 传递给 scorer 的 dones，仅包含首次完成的 env
+            # ==================================================================
+            # 说明：测评模式 per-env 单次生命：跟踪每个 env 的首次完成
+            # ==================================================================
+            # 说明：dones_for_scorer: 传递给 scorer 的 dones，仅包含首次完成的 env
             dones_for_scorer = dones
             if self.is_eval:
                 dones_bool = dones.bool() if isinstance(dones, torch.Tensor) else torch.tensor(dones, dtype=torch.bool)
-                # 延迟初始化 mask（首次 step 时 device 已确定）
+                # 说明：延迟初始化 mask（首次 step 时 device 已确定）
                 if self._eval_env_done_mask is None:
                     self._eval_env_done_mask = torch.zeros(
                         dones_bool.shape[0], dtype=torch.bool, device=dones_bool.device
                     )
 
-                # 只有之前未完成的 env 中新产生的 done 才算"首次完成"
+                # 说明：只有之前未完成的 env 中新产生的 done 才算"首次完成"
                 newly_done = dones_bool & ~self._eval_env_done_mask
                 if newly_done.any():
                     newly_done_ids = torch.where(newly_done)[0]
 
-                    # ---------- Layer1 调试：打印首次完成 env 的具体终止原因 ----------
-                    # Debug: print which termination term fired for each newly-done env.
-                    # Helps diagnose "episode ends at first step" issues (e.g. maze terrain).
+                    # 说明：---------- Layer1 调试：打印首次完成 env 的具体结束原因 ----------
+                    # Note: Debug: print which termination term fired for each newly-done env.
+                    # Note: Helps diagnose "episode ends at first step" issues (e.g. maze section terrain).
                     try:
                         env_unwrapped = self._gym_env.unwrapped
                         term_mgr = getattr(env_unwrapped, "termination_manager", None)
                         if term_mgr is not None:
-                            # 兼容不同 Isaac Lab 版本：active_terms 可能是 list 也可能是 property
+                            # 说明：兼容不同 Isaac Lab 版本：active_terms 可能是 list 也可能是 property
                             active_terms = getattr(term_mgr, "active_terms", None)
                             if active_terms is None:
                                 active_terms = list(term_mgr._term_names) if hasattr(term_mgr, "_term_names") else []
@@ -2120,7 +2121,7 @@ class Robot:
                                     )
                     except Exception as e:
                         self.logger.error(f"[eval term-debug] 打印终止原因异常: {e}")
-                    # ---------- Layer1 调试结束 ----------
+                    # 说明：---------- Layer1 调试结束 ----------
 
                     self._eval_env_done_mask[newly_done_ids] = True
                     self.logger.info(
@@ -2128,10 +2129,10 @@ class Robot:
                         f"(total done: {self._eval_env_done_mask.sum().item()}/{self._eval_env_done_mask.shape[0]})"
                     )
 
-                # scorer 只统计首次完成的 env
+                # 说明：scorer 只统计首次完成的 env
                 dones_for_scorer = newly_done
 
-            # ---------- 监控上报 ----------
+            # 说明：---------- 监控上报 ----------
             if self._env_monitor is not None:
                 try:
                     env_unwrapped = self._gym_env.unwrapped
@@ -2144,15 +2145,15 @@ class Robot:
                 except Exception as e:
                     self.logger.error(f"监控上报 on_step 异常: {e}")
 
-            # ---------- TiledCamera 视频帧写入 ----------
-            # 写帧放在 _eval_env_done_mask 更新之后：设计原则"保留现场"——
-            # 若 env 首步即终止，_eval_env_done_mask 已置 True，skip_mask 会屏蔽本帧，
-            # 生成的 0 帧空壳 mp4（~258B）本身就是问题现场证据，配合 [eval term-debug]
-            # 日志可定位终止原因（不做"提前写一帧以便播放"的兜底，避免掩盖问题）。
+            # 说明：---------- TiledCamera 视频帧写入 ----------
+            # 说明：写帧放在 _eval_env_done_mask 更新之后：设计原则"维持现场"——
+            # 说明：若 env 首步即结束，_eval_env_done_mask 已置 True，skip_mask 会屏蔽本帧，
+            # 说明：构造的 0 帧空壳 mp4（~258B）本身就是问题现场证据，配合 [eval term-debug]
+            # 说明：日志可定位结束原因（不做"提前写一帧以便播放"的兜底，尽量防止掩盖问题）。
             if self._use_tiled_camera:
                 self._write_camera_frames()
 
-            # DEBUG: 每500步打印 terrain level 和速度命令范围
+            # 说明：DEBUG: 每500步打印 terrain level 和速率指令区间
             if self.frame_no % 500 == 0:
                 try:
                     env_unwrapped = self._gym_env.unwrapped
@@ -2204,14 +2205,14 @@ class Robot:
                 "truncated": truncated,
             }
 
-            # ---------- 终止判断逻辑 ----------
+            # 说明：---------- 结束判定逻辑 ----------
             infos = {}
             terminated_flat = terminated.flatten()
             all_terminated = bool(terminated_flat.all())
             terminated_count = int(terminated_flat.sum())
             reached_max_length = self.frame_no > self.max_episode_length
 
-            # 评估模式：所有 env 都完成过一次 episode 即触发 all_done
+            # 说明：测评模式：所有 env 都完成过一次 episode 即触发 all_done
             eval_all_envs_done = (
                 self.is_eval and self._eval_env_done_mask is not None and bool(self._eval_env_done_mask.all())
             )
@@ -2228,7 +2229,7 @@ class Robot:
                         f"{'all envs terminated' if all_terminated else 'reached max length'}, "
                         f"frame_no={self.frame_no}, max_length={self.max_episode_length}"
                     )
-                # 仅评估模式生成结果文件（battle_dir 仅在 is_eval 时初始化）
+                # 说明：仅测评模式构造结果文件（battle_dir 仅在 is_eval 时初始化）
                 if self.is_eval and not self._result_files_written:
                     try:
                         self.make_json_and_done_file()
@@ -2242,9 +2243,9 @@ class Robot:
             self.logger.exception("step error")
             return None
 
-    # ------------------------------------------------------------------
-    # action / observation space
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # Note: control action / input observation space
+    # ==================================================================
     def get_action_space(self):
         try:
             return self.env.action_space
@@ -2259,9 +2260,9 @@ class Robot:
             self.logger.exception("get_observation_space error")
             return None
 
-    # ------------------------------------------------------------------
-    # 内部: 构建 end_info 评估数据
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # 说明：内部: 构建 end_info 测评数据
+    # ==================================================================
     def _build_end_info(self) -> dict:
         """从 BaseScorer 中提取评估指标，构建 end_info 字典。
 
@@ -2320,33 +2321,33 @@ class Robot:
         if not metrics:
             return {}
 
-        # Episode-count helper (BUGFIX: no longer double-counts timeout in standard mode).
-        # episode_count 计算辅助函数（修复：standard 模式不再重复计数 timeout）。
+        # Note: Episode-count helper (BUGFIX: no longer double-counts timeout in standard mode).
+        # 说明：episode_count 求取辅助函数（修复：standard 模式不再重复计数 timeout）。
         #
-        # Background (见 base_scorer.py:22-27 的口径约定):
-        #   - track  : completed / abnormal / timeout 三类互斥，三者相加 = 总 episode 数
-        #   - standard: completed + abnormal = 总 episode 数；timeout 是 abnormal 的子类
-        #               （abnormal ⊇ timeout），单独可观测但不参与 episode 总数计算
+        # 说明：Background (见 base_scorer.py:22-27 的口径约定):
+        #   说明：- track  : completed / abnormal / timeout 三类互斥，三者相加 = 总 episode 数
+        #   说明：- standard: completed + abnormal = 总 episode 数；timeout 是 abnormal 的子类
+        #               说明：（abnormal ⊇ timeout），单独可输入观测但不参与 episode 总数求取
         #
-        # 背景：scorer 里 standard 模式对一次未走穿的 done，会同时 `abnormal += 1` 和
-        # `timeout += 1`（当 is_timeout=True 时）。因此顶层 / 地形组 / 难度组的 episode
-        # count 若按 c+a+t 累加，会把 timeout 重复计一次，导致 episode_count 虚高。
+        # 说明：背景：scorer 里 standard 模式对一次未走穿的 done，会同时 `abnormal += 1` 和
+        # 说明：`timeout += 1`（当 is_timeout=True 时）。因此顶层 / 赛道地貌组 / 难度组的 episode
+        # 说明：count 若按 c+a+t 累加，会把 timeout 重复计一次，导致 episode_count 虚高。
         def _episode_count_from(key_suffix: str = "") -> int:
             c = int(metrics.get(f"completed_count{key_suffix}", 0))
             a = int(metrics.get(f"abnormal_count{key_suffix}", 0))
             t = int(metrics.get(f"timeout_count{key_suffix}", 0))
             if self._task_type == "track":
                 return c + a + t
-            # standard: abnormal ⊇ timeout, so don't add timeout again.
-            # standard：abnormal 已包含 timeout，不再重复累加。
+            # Note: standard: abnormal ⊇ timeout, so don't add timeout again.
+            # 说明：standard：abnormal 已包含 timeout，不再重复累加。
             return c + a
 
-        # ---- 全局 episode 计数 ----
+        # 说明：---- 全局 episode 计数 ----
         total_episode_count = _episode_count_from("")
         if total_episode_count == 0:
             return {}
 
-        # ---- 全局平均分（顶层字段）----
+        # 说明：---- 全局平均分（顶层字段）----
         completed = int(metrics.get("completed_count", 0))
         end_info: dict = {
             "total_score": _safe_round(metrics.get("total_score", 0.0)),
@@ -2356,7 +2357,7 @@ class Robot:
             "time_score": _safe_round(metrics.get("step_score", 0.0)),
         }
 
-        # standard 模式包含 forward_score 和 time_score，track 模式包含 time_score
+        # 说明：standard 模式包含 forward_score 和 time_score，track 模式包含 time_score
         if self._task_type == "standard":
             end_info["forward_score"] = _safe_round(metrics.get("forward_score", 0.0))
 
@@ -2365,10 +2366,10 @@ class Robot:
                 _safe_round(completed / total_episode_count) if total_episode_count > 0 else 0.0
             )
 
-        # ---- 按地形分组的 score_detail ----
+        # 说明：---- 按赛道地貌分组的 score_detail ----
         score_detail = []
         if self._task_type == "track":
-            # track 模式：按难度档（列索引）分组，每条赛道是一个整体
+            # 说明：track 模式：按难度档（列索引）分组，每条赛道是一个整体
             for col in range(self._scorer._num_cols):
                 sfx = f"track_l{col}"
                 col_episode_count = _episode_count_from(f"_{sfx}")
@@ -2389,7 +2390,7 @@ class Robot:
                 }
                 score_detail.append(detail)
         else:
-            # standard 模式：按子地形类型分组
+            # 说明：standard 模式：按子赛道地貌类型分组
             for terrain_name in self._scorer.terrain_names:
                 terrain_episode_count = _episode_count_from(f"_{terrain_name}")
                 if terrain_episode_count == 0:
@@ -2409,14 +2410,14 @@ class Robot:
 
         end_info["score_detail"] = score_detail
 
-        # ---- 按 (地形, 难度级别) 二维分组的 export_score_detail ----
+        # 说明：---- 按 (赛道地貌, 难度级别) 二维分组的 export_score_detail ----
         export_score_detail = []
         if self._task_type == "track":
-            # track 模式：export_score_detail 与 score_detail 相同（按难度档分组）
-            # 因为 track 整条赛道是一个整体，不存在子地形×难度级别的二维展开
+            # 说明：track 模式：export_score_detail 与 score_detail 相同（按难度档分组）
+            # 说明：因为 track 整条赛道是一个整体，不存在子赛道地貌×难度级别的二维展开
             export_score_detail = list(score_detail)
         else:
-            # standard 模式：按 (子地形, 难度级别) 二维分组
+            # 说明：standard 模式：按 (子赛道地貌, 难度级别) 二维分组
             for terrain_name in self._scorer.terrain_names:
                 for lv in range(self._scorer.num_levels):
                     sfx = f"{terrain_name}_l{lv}"
@@ -2448,9 +2449,9 @@ class Robot:
 
         return end_info
 
-    # ------------------------------------------------------------------
-    # 生成结果文件（评估模式）
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # 说明：构造结果文件（测评模式）
+    # ==================================================================
     def make_json_and_done_file(self):
         """生成 json 结果文件和 done 标记文件。"""
         if self._result_files_written:
@@ -2459,11 +2460,11 @@ class Robot:
         self.game_status = 1
         end_timestamp = datetime.datetime.now(datetime.timezone.utc)
 
-        # 构建 end_info 评估数据（从 BaseScorer 中提取）
+        # 说明：构建 end_info 测评数据（从 BaseScorer 中提取）
         end_info_dict = self._build_end_info()
         end_info_str = json.dumps(end_info_dict, ensure_ascii=False) if end_info_dict else "{}"
 
-        # 组装结果数据
+        # 说明：组装结果数据
         result_data = {
             "name": self.game_id,
             "project_code": "robot",
@@ -2481,7 +2482,7 @@ class Robot:
             "end_time": end_timestamp.isoformat(),
         }
 
-        # 先关闭写入器，确保 mp4 文件索引完整落盘，再执行压缩。
+        # 说明：先停用写入器，确保 mp4 文件索引完整落盘，再执行压缩。
         mp4_dir = f"{self.battle_dir}/mp4"
         if self.is_need_save_mp4 and os.path.isdir(mp4_dir):
             self._finalize_video_recording()
@@ -2496,13 +2497,13 @@ class Robot:
                     stderr=subprocess.DEVNULL,
                 )
 
-        # 写 json 文件
+        # 说明：写 json 文件
         json_file = f"{self.battle_dir}/result/{self.game_id}.json"
         os.makedirs(f"{self.battle_dir}/result", exist_ok=True)
         with open(json_file, "w") as outfile:
             json.dump(result_data, outfile, indent=4)
 
-        # 写 done 文件
+        # 说明：写 done 文件
         done_file = f"{self.battle_dir}/{self.game_id}.done"
         with open(done_file, "w") as done:
             done.writelines("done")
@@ -2510,13 +2511,13 @@ class Robot:
         self._result_files_written = True
         self.logger.info(f"json_file {json_file} create success, done_file {done_file} create success")
 
-    # ------------------------------------------------------------------
-    # close
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # Note: close
+    # ==================================================================
     def close(self):
         """关闭环境、SimulationApp 并回收显存资源。"""
 
-        # 关闭监控上报（最终 flush）
+        # 说明：停用监控上报（最终 flush）
         if self._env_monitor is not None:
             try:
                 self._env_monitor.close()
@@ -2525,11 +2526,11 @@ class Robot:
             self._env_monitor = None
             self._scorer = None
 
-        # 关闭 TiledCamera 视频写入器
+        # 说明：停用 TiledCamera 视频写入器
         self._finalize_video_recording()
         self._reset_camera_follow_state()
 
-        # 丢弃目标点 marker 引用
+        # 说明：丢弃终点点 marker 引用
         self._goal_markers = None
 
         if self.env is not None:
@@ -2546,10 +2547,10 @@ class Robot:
                 pass
             self._gym_env = None
 
-        # 关闭 SimulationApp
+        # 说明：停用 SimulationApp
         self._shutdown_simulation_app()
 
-        # 释放显存
+        # 说明：释放显存
         if torch.cuda.is_available():
             for _ in range(3):
                 torch.cuda.ipc_collect()
@@ -2557,14 +2558,14 @@ class Robot:
                 torch.cuda.empty_cache()
 
 
-# ======================================================================
-# __main__: standalone test
-# ======================================================================
+# ----------------------------------------------------------------------
+# Note: __main__: standalone test
+# ----------------------------------------------------------------------
 if __name__ == "__main__":
     import time as _time
 
-    # Evaluation configuration matching cluster KAIWU_FEATURE_CONFIG env_config
-    # 评估配置，与集群 KAIWU_FEATURE_CONFIG 的 env_config 对齐
+    # Note: Evaluation configuration matching cluster KAIWU_FEATURE_CONFIG env_config
+    # 说明：测评设定，与集群 KAIWU_FEATURE_CONFIG 的 env_config 对齐
     usr_conf = {
         "game_id": "test_001",
         "is_eval": True,
@@ -2594,11 +2595,11 @@ if __name__ == "__main__":
                 "pyramid_stairs_inv": {"proportion": 0.5},
                 "maze": {"proportion": 0.0},
             },
-            # "track": {
-            #     "track_length": 5,
-            #     "sub_terrains_random": False,
-            #     "sub_terrains": ["pyramid_stairs", "pyramid_slope", "maze"],
-            # },
+            # Note: "track": {
+            #     Note: "track_length": 5,
+            #     Note: "sub_terrains_random": False,
+            #     Note: "sub_terrains": ["pyramid_stairs", "pyramid_slope", "maze section"],
+            # Note: },
         },
         "commands": {
             "limit": {

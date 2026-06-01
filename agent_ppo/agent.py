@@ -1,134 +1,195 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 ###########################################################################
-# Copyright © 1998 - 2026 Tencent. All Rights Reserved.
+# Copyright 1998 - 2026 Tencent. All Rights Reserved.
 ###########################################################################
 """
-Author: Tencent AI Arena Authors
+PPO agent entrypoint.
+
+This file keeps the previous PPO agent behavior while cleaning naming,
+comments, and checkpoint compatibility details.
 """
 
+from __future__ import annotations
 
-import torch
-import numpy as np
 import os
 
-torch.manual_seed(0)
-torch.cuda.manual_seed_all(0)
-np.random.seed(0)
-
+import numpy as np
+import torch
 import torch.optim as optim
 
 from kaiwudrl.interface.agent import BaseAgent
+
+from agent_ppo.algorithm.algorithm_ppo import WkPPOTrainer
+from agent_ppo.conf.conf import WkRuntimeConfig, _load_toml
 from agent_ppo.feature.definition import ActData
-from agent_ppo.conf.conf import Config, _load_toml
-from agent_ppo.model.actor_critic import ActorCritic
-from agent_ppo.algorithm.algorithm_ppo import AlgorithmPPO
+from agent_ppo.model.actor_critic import WkActorCritic
 from tools.train_env_conf_validate import check_usr_conf
 
 
-def _obs_height_grid(obs, scan_start: int = 45, scan_size: int = 256):
-    if obs is None or not hasattr(obs, "shape") or obs.shape[-1] < scan_start + scan_size:
-        return None
-    side = int(scan_size ** 0.5)
-    if side * side != scan_size:
-        return None
-    return obs[:, scan_start:scan_start + scan_size].view(obs.shape[0], side, side)
+def wk_seed_global_random_generators(seed: int = 0) -> None:
+    """Keep startup deterministic across training and evaluation restarts."""
+
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
 
 
-def _classify_pre_maze_terrain(obs, rl_nav_conf):
-    grid = _obs_height_grid(
-        obs,
-        scan_start=int(rl_nav_conf.get("scan_start", 45)),
-        scan_size=int(rl_nav_conf.get("scan_size", 256)),
+wk_seed_global_random_generators(0)
+
+
+def wk_reshape_height_scan_grid(
+    observation_tensor: torch.Tensor,
+    scan_start: int = 45,
+    scan_size: int = 256,
+):
+    """Reshape the flattened height-scan slice into a square grid when possible."""
+
+    if (
+        observation_tensor is None
+        or not hasattr(observation_tensor, "shape")
+        or observation_tensor.shape[-1] < scan_start + scan_size
+    ):
+        return None
+
+    if observation_tensor.dim() == 1:
+        observation_tensor = observation_tensor.unsqueeze(0)
+
+    side_length = int(scan_size**0.5)
+    if side_length * side_length != scan_size:
+        return None
+
+    return observation_tensor[:, scan_start : scan_start + scan_size].view(
+        observation_tensor.shape[0],
+        side_length,
+        side_length,
     )
-    if grid is None:
+
+
+def wk_infer_pre_maze_terrain_class(observation_tensor, rl_navigation_conf):
+    """Infer whether the upcoming non-maze terrain looks flat, sloped, or stair-like."""
+
+    height_grid = wk_reshape_height_scan_grid(
+        observation_tensor,
+        scan_start=int(rl_navigation_conf.get("scan_start", 45)),
+        scan_size=int(rl_navigation_conf.get("scan_size", 256)),
+    )
+    if height_grid is None:
         return None
 
-    row_start = max(int(rl_nav_conf.get("terrain_row_start", 3)), 0)
-    row_end = min(int(rl_nav_conf.get("terrain_row_end", 13)), grid.shape[1])
-    front_cols = min(int(rl_nav_conf.get("terrain_front_cols", 8)), grid.shape[2])
-    if row_end <= row_start or front_cols <= 1:
+    row_start = max(int(rl_navigation_conf.get("terrain_row_start", 3)), 0)
+    row_end = min(int(rl_navigation_conf.get("terrain_row_end", 13)), height_grid.shape[1])
+    front_col_count = min(int(rl_navigation_conf.get("terrain_front_cols", 8)), height_grid.shape[2])
+    if row_end <= row_start or front_col_count <= 1:
         return None
 
-    sector = grid[:, row_start:row_end, :front_cols]
-    if sector.shape[1] == 0 or sector.shape[2] <= 1:
+    front_sector = height_grid[:, row_start:row_end, :front_col_count]
+    if front_sector.shape[1] == 0 or front_sector.shape[2] <= 1:
         return None
 
-    lateral_std = sector.std(dim=1, unbiased=False).mean(dim=1)
-    dx = sector[:, :, 1:] - sector[:, :, :-1]
-    abs_dx = dx.abs()
-    if abs_dx.numel() == 0:
+    lateral_std = front_sector.std(dim=1, unbiased=False).mean(dim=1)
+    lateral_deltas = front_sector[:, :, 1:] - front_sector[:, :, :-1]
+    abs_lateral_deltas = lateral_deltas.abs()
+    if abs_lateral_deltas.numel() == 0:
         return None
 
-    q = float(rl_nav_conf.get("terrain_step_quantile", 0.85))
-    q = min(max(q, 0.0), 1.0)
-    step_strength = torch.quantile(abs_dx.flatten(1), q, dim=1)
-    sign_consistency = dx.mean(dim=(1, 2)).abs() / (abs_dx.mean(dim=(1, 2)) + 1e-6)
-    if dx.shape[2] > 1:
-        second_diff = (dx[:, :, 1:] - dx[:, :, :-1]).abs().mean(dim=(1, 2))
+    terrain_quantile = float(rl_navigation_conf.get("terrain_step_quantile", 0.85))
+    terrain_quantile = min(max(terrain_quantile, 0.0), 1.0)
+    step_strength = torch.quantile(abs_lateral_deltas.flatten(1), terrain_quantile, dim=1)
+    sign_consistency = lateral_deltas.mean(dim=(1, 2)).abs() / (
+        abs_lateral_deltas.mean(dim=(1, 2)) + 1e-6
+    )
+    if lateral_deltas.shape[2] > 1:
+        second_difference = (
+            lateral_deltas[:, :, 1:] - lateral_deltas[:, :, :-1]
+        ).abs().mean(dim=(1, 2))
     else:
-        second_diff = torch.zeros(obs.shape[0], device=obs.device, dtype=obs.dtype)
+        second_difference = torch.zeros(
+            observation_tensor.shape[0],
+            device=observation_tensor.device,
+            dtype=observation_tensor.dtype,
+        )
 
-    is_uniform = lateral_std < float(rl_nav_conf.get("terrain_lateral_std_threshold", 0.18))
-    not_wall = sector.amin(dim=(1, 2)) > float(rl_nav_conf.get("terrain_wall_height_threshold", -1.05))
-    terrain_like = is_uniform & not_wall & (
-        step_strength > float(rl_nav_conf.get("terrain_slope_delta_threshold", 0.035))
+    is_uniform_surface = lateral_std < float(
+        rl_navigation_conf.get("terrain_lateral_std_threshold", 0.18)
     )
-    stair_like = terrain_like & (
-        (step_strength > float(rl_nav_conf.get("terrain_stair_delta_threshold", 0.10)))
-        | (second_diff > float(rl_nav_conf.get("terrain_stair_second_diff_threshold", 0.055)))
+    is_not_wall = front_sector.amin(dim=(1, 2)) > float(
+        rl_navigation_conf.get("terrain_wall_height_threshold", -1.05)
     )
-    slope_like = terrain_like & ~stair_like & (
-        sign_consistency > float(rl_nav_conf.get("terrain_slope_sign_consistency_threshold", 0.55))
+    looks_like_terrain = is_uniform_surface & is_not_wall & (
+        step_strength > float(rl_navigation_conf.get("terrain_slope_delta_threshold", 0.035))
+    )
+    looks_like_stairs = looks_like_terrain & (
+        (step_strength > float(rl_navigation_conf.get("terrain_stair_delta_threshold", 0.10)))
+        | (
+            second_difference
+            > float(rl_navigation_conf.get("terrain_stair_second_diff_threshold", 0.055))
+        )
+    )
+    looks_like_slope = looks_like_terrain & ~looks_like_stairs & (
+        sign_consistency
+        > float(rl_navigation_conf.get("terrain_slope_sign_consistency_threshold", 0.55))
     )
 
-    terrain_id = torch.zeros(obs.shape[0], dtype=torch.long, device=obs.device)
-    terrain_id = torch.where(slope_like, torch.ones_like(terrain_id), terrain_id)
-    terrain_id = torch.where(stair_like, torch.full_like(terrain_id, 2), terrain_id)
+    terrain_id = torch.zeros(
+        observation_tensor.shape[0],
+        dtype=torch.long,
+        device=observation_tensor.device,
+    )
+    terrain_id = torch.where(looks_like_slope, torch.ones_like(terrain_id), terrain_id)
+    terrain_id = torch.where(looks_like_stairs, torch.full_like(terrain_id, 2), terrain_id)
     return terrain_id
 
 
 class Agent(BaseAgent):
+    """KaiwuDRL-facing PPO agent wrapper."""
+
     def __init__(self, agent_type="player", device="cuda", logger=None, monitor=None):
-        self.cur_model_name = "ActorCritic"
+        self.cur_model_name = "WkActorCritic"
         self.device = device
         self.logger = logger
         self.monitor = monitor
 
-        usr_conf, usr_conf_file, is_eval, stage = Config.load_conf(self.logger)
-        self.is_eval = is_eval
-        valid, message = check_usr_conf(usr_conf, is_eval, self.logger)
-        if not valid:
-            self.logger.error(f"check_usr_conf is {valid}, message is {message}, please check {usr_conf_file}")
-            raise Exception(f"check_usr_conf is {valid}, message is {message}, please check {usr_conf_file}")
+        runtime_env_conf, runtime_env_conf_path, is_eval_mode, stage_config = WkRuntimeConfig.load_conf(
+            self.logger
+        )
+        self.is_eval = is_eval_mode
+        is_valid_conf, validation_message = check_usr_conf(
+            runtime_env_conf,
+            is_eval_mode,
+            self.logger,
+        )
+        if not is_valid_conf:
+            error_message = (
+                f"check_usr_conf is {is_valid_conf}, message is {validation_message}, "
+                f"please check {runtime_env_conf_path}"
+            )
+            if self.logger is not None:
+                self.logger.error(error_message)
+            raise Exception(error_message)
 
-        self.stage = stage
-        env_conf = usr_conf["env"]
-        self.num_envs = env_conf["num_envs"]
+        self.stage = stage_config
+        self.num_envs = runtime_env_conf["env"]["num_envs"]
 
-        # Model architecture dims come from StageConfig (architecture constants,
-        # not user-tunable business params). Do NOT read them from TOML.
-        # 模型架构维度来自 StageConfig（架构常量，非业务可调参数），不从 TOML 读。
-        self.num_actions = stage.num_actions
-        self.num_critic_obs = stage.num_critic_observations
+        # Note: These dimensions are architecture constants bound to StageConfig.
+        # Note: Keeping them out of TOML avoids accidental checkpoint incompatibility.
+        self.num_actions = stage_config.num_actions
+        self.num_critic_obs = stage_config.num_critic_observations
 
-        num_proprio = stage.num_proprio_obs
-        num_scan = stage.num_scan
-        num_goal_obs = getattr(stage, "num_goal_obs", 0)
+        num_proprio_obs = stage_config.num_proprio_obs
+        num_scan_obs = stage_config.num_scan
+        num_goal_obs = getattr(stage_config, "num_goal_obs", 0)
+        self.num_obs = num_proprio_obs + num_scan_obs + num_goal_obs
 
-        # policy obs = proprio + scan + goal
-        # 策略观测 = 本体感知 + 扫描 + 目标
-        self.num_obs = num_proprio + num_scan + num_goal_obs
+        self._wk_build_flat_actor_critic_components(stage_config)
 
-        self._init_flat(num_proprio, num_scan, num_goal_obs, stage)
+        train_stage_runtime_conf = {}
+        if is_eval_mode and stage_config.task_type == "track":
+            train_stage_runtime_conf = self._wk_load_train_stage_runtime_config(stage_config)
 
-        train_stage_conf = {}
-        if is_eval and stage.task_type == "track":
-            train_stage_conf = self._load_train_stage_conf(stage)
-
-        # Pure-RL navigation: no local planner is used.  In evaluation, platform
-        # command ranges may be unrelated to this training objective, so keep the
-        # policy command observation aligned with the forward-walking anchor.
+        # Note: Evaluation retains the policy command input observation aligned with the
+        # Note: track-navigation objective even if the platform command ranges differ.
         self.eval_command_override = None
         self.eval_phase_command_enabled = False
         self.eval_pre_maze_command = None
@@ -137,76 +198,61 @@ class Agent(BaseAgent):
         self.eval_maze_command = None
         self.eval_phase_maze_goal_dist_gate = 14.0
         self.eval_rl_nav_conf = {}
-        if is_eval and stage.task_type == "track":
-            rl_nav_conf = train_stage_conf.get("rl_navigation", {}).copy()
-            rl_nav_conf.update(usr_conf.get("rl_navigation", {}))
-            self.eval_rl_nav_conf = rl_nav_conf.copy()
-            self.eval_phase_command_enabled = bool(rl_nav_conf.get("phase_command_enabled", False))
+        if is_eval_mode and stage_config.task_type == "track":
+            rl_navigation_conf = train_stage_runtime_conf.get("rl_navigation", {}).copy()
+            rl_navigation_conf.update(runtime_env_conf.get("rl_navigation", {}))
+            self.eval_rl_nav_conf = rl_navigation_conf.copy()
+            self.eval_phase_command_enabled = bool(
+                rl_navigation_conf.get("phase_command_enabled", False)
+            )
             self.eval_phase_maze_goal_dist_gate = float(
-                rl_nav_conf.get("phase_maze_goal_dist_gate", 14.0)
+                rl_navigation_conf.get("phase_maze_goal_dist_gate", 14.0)
             )
-
-            def _eval_phase_command(command_key, range_key, default_range):
-                """Build one fixed eval command for a track phase.
-
-                Args:
-                    command_key: Optional explicit 3D command in TOML, such as
-                        ``eval_stairs_command = [0.58, 0, 0]``.
-                    range_key: Training speed range to fall back to when the
-                        explicit eval command is absent.
-                    default_range: Last fallback range if neither key exists.
-
-                Evaluation is deterministic, so a fixed command is preferable to
-                sampling from the train range.  It lets us tune time_score versus
-                energy_score per phase without retraining the observation shape.
-                """
-                command = rl_nav_conf.get(command_key)
-                if isinstance(command, (list, tuple)) and len(command) == 3:
-                    # Preferred path: use the exact eval command from TOML.
-                    values = [float(command[0]), float(command[1]), float(command[2])]
-                    return torch.tensor(values, device=self.device, dtype=torch.float32)
-
-                speed_range = rl_nav_conf.get(range_key, default_range)
-                if isinstance(speed_range, (list, tuple)) and len(speed_range) == 2:
-                    # Fallback path: use the midpoint of the training speed range.
-                    vx = 0.5 * (float(speed_range[0]) + float(speed_range[1]))
-                    return torch.tensor([vx, 0.0, 0.0], device=self.device, dtype=torch.float32)
-
-                # Invalid or missing config: leave this phase command disabled.
-                return None
-
-            pre_range = rl_nav_conf.get("pre_maze_lin_vel_x", [0.75, 1.0])
-            # Each phase can have a separate deterministic eval command.  This
-            # is useful because stairs usually need lower speed for energy and
-            # stability, while slope/pre-maze can afford higher speed.
-            self.eval_pre_maze_command = _eval_phase_command(
-                "eval_pre_maze_command", "pre_maze_lin_vel_x", pre_range
-            )
-            self.eval_slope_command = _eval_phase_command(
-                "eval_slope_command", "slope_lin_vel_x", pre_range
-            )
-            self.eval_stairs_command = _eval_phase_command(
-                "eval_stairs_command", "stairs_lin_vel_x", pre_range
-            )
-            self.eval_maze_command = _eval_phase_command(
-                "eval_maze_command", "maze_lin_vel_x", [0.45, 0.65]
-            )
-            if bool(rl_nav_conf.get("eval_command_override", True)):
-                cmd = rl_nav_conf.get("eval_command", [0.55, 0.0, 0.0])
-                if len(cmd) == 3:
+            pre_maze_range = rl_navigation_conf.get("pre_maze_lin_vel_x", [0.75, 1.0])
+            slope_range = rl_navigation_conf.get("slope_lin_vel_x", pre_maze_range)
+            stairs_range = rl_navigation_conf.get("stairs_lin_vel_x", pre_maze_range)
+            maze_range = rl_navigation_conf.get("maze_lin_vel_x", [0.45, 0.65])
+            if len(pre_maze_range) == 2:
+                self.eval_pre_maze_command = torch.tensor(
+                    [0.5 * (float(pre_maze_range[0]) + float(pre_maze_range[1])), 0.0, 0.0],
+                    device=self.device,
+                    dtype=torch.float32,
+                )
+            if len(slope_range) == 2:
+                self.eval_slope_command = torch.tensor(
+                    [0.5 * (float(slope_range[0]) + float(slope_range[1])), 0.0, 0.0],
+                    device=self.device,
+                    dtype=torch.float32,
+                )
+            if len(stairs_range) == 2:
+                self.eval_stairs_command = torch.tensor(
+                    [0.5 * (float(stairs_range[0]) + float(stairs_range[1])), 0.0, 0.0],
+                    device=self.device,
+                    dtype=torch.float32,
+                )
+            if len(maze_range) == 2:
+                self.eval_maze_command = torch.tensor(
+                    [0.5 * (float(maze_range[0]) + float(maze_range[1])), 0.0, 0.0],
+                    device=self.device,
+                    dtype=torch.float32,
+                )
+            if bool(rl_navigation_conf.get("eval_command_override", True)):
+                eval_command = rl_navigation_conf.get("eval_command", [0.55, 0.0, 0.0])
+                if len(eval_command) == 3:
                     self.eval_command_override = torch.tensor(
-                        cmd, device=self.device, dtype=torch.float32
+                        eval_command,
+                        device=self.device,
+                        dtype=torch.float32,
                     )
-                    self.logger.info(
-                        "[RLNavigation] Eval policy command obs override enabled: "
-                        f"{cmd}"
-                    )
+                    if self.logger is not None:
+                        self.logger.info(
+                            "[RLNavigation] Eval policy command obs override enabled: "
+                            f"{eval_command}"
+                        )
 
-        self.num_steps_per_env = stage.num_steps_per_env
-        self.save_interval = stage.model_save_interval
+        self.num_steps_per_env = stage_config.num_steps_per_env
+        self.save_interval = stage_config.model_save_interval
 
-        # Initialize storage
-        # 初始化存储
         self.algorithm.init_storage(
             self.num_envs,
             self.num_steps_per_env,
@@ -218,153 +264,183 @@ class Agent(BaseAgent):
 
         super().__init__(agent_type, device, logger, monitor)
 
-    def _load_train_stage_conf(self, stage):
-        train_conf_file = f"agent_ppo/conf/train_env_conf_{stage.task_type}_{stage.name}.toml"
-        if not os.path.exists(train_conf_file):
+    def _wk_load_train_stage_runtime_config(self, stage_config):
+        """Load the train-stage TOML so evaluation can reuse RL-navigation settings."""
+
+        train_stage_config_file = (
+            f"agent_ppo/conf/train_env_conf_{stage_config.task_type}_{stage_config.name}.toml"
+        )
+        if not os.path.exists(train_stage_config_file):
             return {}
         try:
-            return _load_toml(train_conf_file)
+            return _load_toml(train_stage_config_file)
         except Exception as exc:
             if self.logger is not None:
                 self.logger.warning(
-                    f"[RLNavigation] Failed to load train stage config "
-                    f"from {train_conf_file}: {exc}"
+                    "[RLNavigation] Failed to load train stage config "
+                    f"from {train_stage_config_file}: {exc}"
                 )
             return {}
 
-    def _apply_eval_command_to_obs(self, obs):
-        """Patch command observations during evaluation.
+    def _wk_inject_eval_command_observation(self, policy_obs):
+        """Inject evaluation-time command anchors into policy observations.
 
-        The platform may supply broad/random velocity commands during eval, but
-        this Track policy was trained to use command slots as a gait anchor and
-        goal/scan features for navigation.  Replacing obs[:, 6:9] keeps eval
-        consistent with training and avoids wasting energy chasing irrelevant
-        lateral/yaw commands.
+        Evaluation sometimes dispatches a single observation vector with shape
+        ``(obs_dim,)`` instead of a batch with shape ``(1, obs_dim)``. This
+        helper normalizes both cases to a temporary batch view so the same
+        command-patching logic works in train and eval code paths.
         """
-        if obs is None or obs.shape[-1] < 9:
-            return obs
+
+        if policy_obs is None or policy_obs.shape[-1] < 9:
+            return policy_obs
+
+        input_was_single_observation = policy_obs.dim() == 1
+        if input_was_single_observation:
+            policy_obs = policy_obs.unsqueeze(0)
+
         if (
             self.eval_phase_command_enabled
             and self.eval_pre_maze_command is not None
             and self.eval_maze_command is not None
-            and obs.shape[-1] >= 304
+            and policy_obs.shape[-1] >= 304
         ):
-            nav_obs = obs.clone()
-            # Goal distance is appended by PolicyObservationProcess as the last
-            # goal feature, normalized by /20.  Undo that normalization to detect
-            # the final maze phase.
-            goal_dist = torch.clamp(nav_obs[:, 303], 0.0, 1.0) * 20.0
-            maze_phase = goal_dist < self.eval_phase_maze_goal_dist_gate
-
-            # Start from pre-maze speed, then override by terrain classifier or
-            # maze phase below.
-            command = self.eval_pre_maze_command.to(device=obs.device, dtype=obs.dtype).expand(obs.shape[0], -1)
+            eval_policy_obs = policy_obs.clone()
+            goal_distance = torch.clamp(eval_policy_obs[:, 303], 0.0, 1.0) * 20.0
+            maze_phase = goal_distance < self.eval_phase_maze_goal_dist_gate
+            command = self.eval_pre_maze_command.to(
+                device=policy_obs.device,
+                dtype=policy_obs.dtype,
+            ).expand(policy_obs.shape[0], -1)
             if bool(self.eval_rl_nav_conf.get("terrain_phase_speed_enabled", False)):
-                # Height-scan classifier distinguishes slope/stairs before the
-                # maze so eval can slow down only where it matters.
-                terrain_id = _classify_pre_maze_terrain(nav_obs, self.eval_rl_nav_conf)
+                terrain_id = wk_infer_pre_maze_terrain_class(
+                    eval_policy_obs,
+                    self.eval_rl_nav_conf,
+                )
                 if terrain_id is not None:
                     if self.eval_slope_command is not None:
-                        slope_command = self.eval_slope_command.to(device=obs.device, dtype=obs.dtype).expand(obs.shape[0], -1)
+                        slope_command = self.eval_slope_command.to(
+                            device=policy_obs.device,
+                            dtype=policy_obs.dtype,
+                        ).expand(policy_obs.shape[0], -1)
                         command = torch.where((terrain_id == 1).unsqueeze(1), slope_command, command)
                     if self.eval_stairs_command is not None:
-                        stairs_command = self.eval_stairs_command.to(device=obs.device, dtype=obs.dtype).expand(obs.shape[0], -1)
+                        stairs_command = self.eval_stairs_command.to(
+                            device=policy_obs.device,
+                            dtype=policy_obs.dtype,
+                        ).expand(policy_obs.shape[0], -1)
                         command = torch.where((terrain_id == 2).unsqueeze(1), stairs_command, command)
-            maze_command = self.eval_maze_command.to(device=obs.device, dtype=obs.dtype).expand(obs.shape[0], -1)
-            # Maze phase has final priority because wall avoidance and turning
-            # are usually more expensive than straight pre-maze running.
+            maze_command = self.eval_maze_command.to(
+                device=policy_obs.device,
+                dtype=policy_obs.dtype,
+            ).expand(policy_obs.shape[0], -1)
             command = torch.where(maze_phase.unsqueeze(1), maze_command, command)
+            eval_policy_obs[:, 6:9] = command
+            return eval_policy_obs.squeeze(0) if input_was_single_observation else eval_policy_obs
 
-            # In the standard Isaac Lab observation layout, command slots are
-            # obs[:, 6:9] = [lin_vel_x, lin_vel_y, yaw_rate].
-            nav_obs[:, 6:9] = command
-            return nav_obs
         if self.eval_command_override is None:
-            return obs
-        nav_obs = obs.clone()
-        # Coarse fallback: one fixed command for the whole track.
-        nav_obs[:, 6:9] = self.eval_command_override.to(
-            device=obs.device, dtype=obs.dtype
-        )
-        return nav_obs
+            return policy_obs.squeeze(0) if input_was_single_observation else policy_obs
 
-    def _init_flat(self, num_proprio, num_scan, num_goal_obs, stage):
-        """
-        Initialize single-model (flat) architecture.
-        初始化单模型（扁平）架构。
-        """
-        self.model = ActorCritic(
+        eval_policy_obs = policy_obs.clone()
+        eval_policy_obs[:, 6:9] = self.eval_command_override.to(
+            device=policy_obs.device,
+            dtype=policy_obs.dtype,
+        )
+        return eval_policy_obs.squeeze(0) if input_was_single_observation else eval_policy_obs
+
+    def _wk_build_flat_actor_critic_components(self, stage_config):
+        """Build the feed-forward actor-critic and PPO optimizer used by legacy PPO."""
+
+        self.model = WkActorCritic(
             num_obs=self.num_obs,
             num_critic_obs=self.num_critic_obs,
             num_actions=self.num_actions,
-            actor_hidden_dims=stage.actor_hidden_dims,
-            critic_hidden_dims=stage.critic_hidden_dims,
-            activation=stage.activation,
-            init_noise_std=getattr(stage, "init_noise_std", 1.0),
+            actor_hidden_dims=stage_config.actor_hidden_dims,
+            critic_hidden_dims=stage_config.critic_hidden_dims,
+            activation=stage_config.activation,
+            init_noise_std=getattr(stage_config, "init_noise_std", 1.0),
         ).to(self.device)
 
-        self.logger.info(f"Actor MLP: {self.model.actor}")
-        self.logger.info(f"Critic MLP: {self.model.critic}")
+        if self.logger is not None:
+            self.logger.info(f"Actor MLP: {self.model.actor}")
+            self.logger.info(f"Critic MLP: {self.model.critic}")
 
-        params = [{"params": self.model.parameters(), "name": "actor_critic"}]
-        self.optimizer = optim.Adam(params, lr=stage.lr)
+        optimizer_params = [{"params": self.model.parameters(), "name": "actor_critic"}]
+        self.optimizer = optim.Adam(optimizer_params, lr=stage_config.lr)
 
-        self.algorithm = AlgorithmPPO(
+        self.algorithm = WkPPOTrainer(
             model=self.model,
             optimizer=self.optimizer,
             device=self.device,
             logger=self.logger,
             monitor=self.monitor,
-            learning_rate=stage.lr,
-            clip_param=getattr(stage, "clip_param", 0.2),
-            entropy_coef=getattr(stage, "entropy_coef", 0.01),
-            desired_kl=getattr(stage, "desired_kl", 0.01),
-            num_mini_batches=stage.num_mini_batches,
-            num_learning_epochs=stage.num_learning_epochs,
+            learning_rate=stage_config.lr,
+            clip_param=getattr(stage_config, "clip_param", 0.2),
+            entropy_coef=getattr(stage_config, "entropy_coef", 0.01),
+            desired_kl=getattr(stage_config, "desired_kl", 0.01),
+            num_mini_batches=stage_config.num_mini_batches,
+            num_learning_epochs=stage_config.num_learning_epochs,
         )
 
     def exploit(self, list_obs_data):
+        """Run deterministic policy inference for evaluation.
+
+        The original evaluation path forwards the full policy observation tensor
+        directly into ``exploit``. Keep that behavior so vectorized evaluation
+        still receives one action row per environment. A single observation
+        vector is still accepted and promoted to batch form for inference.
         """
-        Exploit learned policy for action selection in evaluation mode.
-        在评估模式下利用已学习的策略进行动作选择。
-        """
-        (obs) = list_obs_data
+
+        policy_obs = list_obs_data
+        if not torch.is_tensor(policy_obs):
+            if isinstance(policy_obs, (list, tuple)) and len(policy_obs) == 1:
+                policy_obs = policy_obs[0]
+            else:
+                raise TypeError(
+                    "exploit expects a policy observation tensor or a single-item container"
+                )
+        if policy_obs.dim() == 1:
+            policy_obs = policy_obs.unsqueeze(0)
         with torch.no_grad():
-            obs = self._apply_eval_command_to_obs(obs)
-            actions = self.algorithm.actor_critic.act_inference(obs)
+            eval_policy_obs = self._wk_inject_eval_command_observation(policy_obs)
+            actions = self.algorithm.actor_critic.act_inference(eval_policy_obs)
+            # Note: Retain the control action batch dimension steady for the Isaac control action manager.
+            if actions.dim() == 1:
+                actions = actions.unsqueeze(0)
             return [ActData(action=actions)]
 
     def learn(self, list_sample_data=None):
-        """
-        Trigger learning process using sample data.
-        使用样本数据触发学习过程。
+        """Trigger PPO optimization using rollout storage filled by the workflow."""
 
-        Note: AlgorithmPPO.learn() doesn't take batch_data as argument anymore.
-        It reads from its internal storage that was filled by workflow's run_episodes_.
-        注：AlgorithmPPO.learn() 不再接受 batch_data 参数，
-        而是直接读取 workflow 的 run_episodes_ 填充的内部存储。
-        """
         return self.algorithm.learn()
 
     def predict(self, list_obs_data):
-        """
-        Generate predictions with actor-critic network.
-        使用 actor-critic 网络生成预测。
-        """
-        (obs, critic_obs) = list_obs_data
+        """Run stochastic policy inference for rollout collection."""
+
+        policy_obs = list_obs_data[0]
+        critic_obs = list_obs_data[1]
 
         with torch.no_grad():
             if self.is_eval:
-                obs = self._apply_eval_command_to_obs(obs)
+                policy_obs = self._wk_inject_eval_command_observation(policy_obs)
+
             hidden_states = None
             if getattr(self.algorithm.actor_critic, "is_recurrent", False):
-                current_hidden = self.algorithm.actor_critic.get_hidden_states()
-                if current_hidden is None or current_hidden[0].shape[1] != obs.shape[0]:
-                    self.algorithm.actor_critic._init_hidden_states(obs.shape[0], obs.device, obs.dtype)
-                    current_hidden = self.algorithm.actor_critic.get_hidden_states()
-                hidden_states = tuple(state.detach().clone() for state in current_hidden)
+                current_hidden_states = self.algorithm.actor_critic.get_hidden_states()
+                if (
+                    current_hidden_states is None
+                    or current_hidden_states[0].shape[1] != policy_obs.shape[0]
+                ):
+                    self.algorithm.actor_critic._init_hidden_states(
+                        policy_obs.shape[0],
+                        policy_obs.device,
+                        policy_obs.dtype,
+                    )
+                    current_hidden_states = self.algorithm.actor_critic.get_hidden_states()
+                hidden_states = tuple(
+                    hidden_state.detach().clone() for hidden_state in current_hidden_states
+                )
 
-            actions = self.algorithm.actor_critic.act(obs)
+            actions = self.algorithm.actor_critic.act(policy_obs)
             values = self.algorithm.actor_critic.evaluate(critic_obs)
             log_probs = self.algorithm.actor_critic.get_actions_log_prob(actions)
             action_mean = self.algorithm.actor_critic.action_mean.detach()
@@ -376,61 +452,69 @@ class Agent(BaseAgent):
                 log_probs,
                 action_mean,
                 action_std,
-                obs.detach(),
+                policy_obs.detach(),
                 critic_obs.detach(),
                 hidden_states,
             )
 
-    def save_model(self, path=None, id="1"):
-        """
-        Save model checkpoint.
-        保存模型 checkpoint。
-        """
-        model_file_path = f"{path}/model.ckpt-{str(id)}.pkl"
-        torch.save(self.model.state_dict(), model_file_path)
-        self.logger.info(f"save model {model_file_path} successfully")
+    def save_model(self, path=None, id="1", *args, **kwargs):
+        """Save the current model checkpoint without changing legacy path layout."""
 
-    def load_model(self, path=None, id="1"):
-        """
-        Load model checkpoint.
-        加载模型 checkpoint。
-        """
-        model_file_path = f"{path}/model.ckpt-{str(id)}.pkl"
+        save_directory = path or os.path.join(os.path.dirname(__file__), "checkpoints")
+        os.makedirs(save_directory, exist_ok=True)
+        model_file_path = f"{save_directory}/model.ckpt-{str(id)}.pkl"
+        torch.save(self.model.state_dict(), model_file_path)
+        if self.logger is not None:
+            self.logger.info(f"save model {model_file_path} successfully")
+
+    def load_model(self, path=None, id="1", *args, **kwargs):
+        """Load a checkpoint, falling back to partial transfer when shapes differ."""
+
+        load_directory = path or os.path.join(os.path.dirname(__file__), "checkpoints")
+        model_file_path = f"{load_directory}/model.ckpt-{str(id)}.pkl"
         if self.cur_model_name == model_file_path:
-            self.logger.info(f"current model is {model_file_path}, so skip load model")
+            if self.logger is not None:
+                self.logger.info(f"current model is {model_file_path}, so skip load model")
             return
 
-        pretrained = torch.load(model_file_path, map_location=self.device)
+        pretrained_state = torch.load(model_file_path, map_location=self.device)
         current_state = self.model.state_dict()
 
-        has_mismatch = False
-        for key in pretrained:
-            if key in current_state and pretrained[key].shape != current_state[key].shape:
-                has_mismatch = True
+        has_shape_mismatch = False
+        for param_name, pretrained_param in pretrained_state.items():
+            if param_name in current_state and pretrained_param.shape != current_state[param_name].shape:
+                has_shape_mismatch = True
                 break
 
-        if not has_mismatch:
-            self.model.load_state_dict(pretrained)
-            self.logger.info(f"load model {model_file_path} successfully (exact match)")
+        if not has_shape_mismatch:
+            self.model.load_state_dict(pretrained_state)
+            if self.logger is not None:
+                self.logger.info(f"load model {model_file_path} successfully (exact match)")
         else:
-            self._load_model_partial(self.model, pretrained, model_file_path)
+            self._wk_transfer_checkpoint_parameters_partially(
+                self.model,
+                pretrained_state,
+                model_file_path,
+            )
 
-        self._enforce_action_std_bounds()
+        self._wk_clamp_loaded_action_std_parameters()
         self.cur_model_name = model_file_path
 
-    def _enforce_action_std_bounds(self):
+    def _wk_clamp_loaded_action_std_parameters(self):
+        """Clamp loaded exploration parameters back into the configured safe range."""
+
         min_std_cfg = getattr(self.stage, "min_normalized_std", None)
         max_std_cfg = getattr(self.stage, "max_normalized_std", None)
         if min_std_cfg is None and max_std_cfg is None:
             return
 
-        def _bound_std(std_tensor):
+        def wk_bound_std(std_tensor):
             posinf_value = 1.0e6
             if max_std_cfg is not None:
                 max_std = torch.tensor(max_std_cfg, device=self.device, dtype=std_tensor.dtype)
                 if max_std.shape == std_tensor.data.shape:
                     posinf_value = float(torch.max(max_std).item())
-            bounded = torch.nan_to_num(
+            bounded_std = torch.nan_to_num(
                 std_tensor.data,
                 nan=1.0,
                 posinf=posinf_value,
@@ -438,20 +522,21 @@ class Agent(BaseAgent):
             )
             if min_std_cfg is not None:
                 min_std = torch.tensor(min_std_cfg, device=self.device, dtype=std_tensor.dtype)
-                if min_std.shape == bounded.shape:
-                    bounded = torch.maximum(bounded, min_std)
+                if min_std.shape == bounded_std.shape:
+                    bounded_std = torch.maximum(bounded_std, min_std)
             if max_std_cfg is not None:
                 max_std = torch.tensor(max_std_cfg, device=self.device, dtype=std_tensor.dtype)
-                if max_std.shape == bounded.shape:
-                    bounded = torch.minimum(bounded, max_std)
-            std_tensor.data.copy_(bounded)
+                if max_std.shape == bounded_std.shape:
+                    bounded_std = torch.minimum(bounded_std, max_std)
+            std_tensor.data.copy_(bounded_std)
 
         with torch.no_grad():
             if hasattr(self.model, "std"):
-                _bound_std(self.model.std)
-                self.logger.info(
-                    f"[PPO] action std bounds enforced: min={min_std_cfg}, max={max_std_cfg}"
-                )
+                wk_bound_std(self.model.std)
+                if self.logger is not None:
+                    self.logger.info(
+                        f"[PPO] action std bounds enforced: min={min_std_cfg}, max={max_std_cfg}"
+                    )
             elif hasattr(self.model, "log_std"):
                 log_std = torch.nan_to_num(
                     self.model.log_std.data,
@@ -468,59 +553,72 @@ class Agent(BaseAgent):
                     if max_std.shape == log_std.shape:
                         log_std = torch.minimum(log_std, torch.log(max_std))
                 self.model.log_std.data.copy_(log_std)
-                self.logger.info(
-                    f"[PPO] log action std bounds enforced: min={min_std_cfg}, max={max_std_cfg}"
-                )
+                if self.logger is not None:
+                    self.logger.info(
+                        f"[PPO] log action std bounds enforced: min={min_std_cfg}, max={max_std_cfg}"
+                    )
 
-    def _load_model_partial(self, model, pretrained, model_file_path):
-        """
-        Partial checkpoint loading for cross-stage transfer.
-        部分加载 checkpoint，用于跨阶段迁移。
-        """
+    def _wk_transfer_checkpoint_parameters_partially(self, model, pretrained_state, model_file_path):
+        """Transfer checkpoint weights into the current model when tensor shapes differ."""
+
         current_state = model.state_dict()
         loaded_keys = []
         partial_keys = []
         skipped_keys = []
 
-        for key in current_state:
-            if key not in pretrained:
-                skipped_keys.append(key)
+        for param_name in current_state:
+            if param_name not in pretrained_state:
+                skipped_keys.append(param_name)
                 continue
 
-            if getattr(model, "is_recurrent", False) and key in {"actor.0.weight", "actor.0.bias"}:
-                skipped_keys.append(f"{key} (recurrent front-end)")
+            if getattr(model, "is_recurrent", False) and param_name in {
+                "actor.0.weight",
+                "actor.0.bias",
+            }:
+                skipped_keys.append(f"{param_name} (recurrent front-end)")
                 continue
 
-            old_param = pretrained[key]
-            new_param = current_state[key]
+            old_param = pretrained_state[param_name]
+            new_param = current_state[param_name]
 
             if old_param.shape == new_param.shape:
                 new_param.copy_(old_param)
-                loaded_keys.append(key)
-            else:
-                with torch.no_grad():
-                    new_param.zero_()
-                    slices = tuple(slice(0, min(o, n)) for o, n in zip(old_param.shape, new_param.shape))
-                    if key == "actor.0.weight":
-                        base_cols = self.stage.num_proprio_obs + self.stage.num_scan
-                        slices = (
-                            slice(0, min(old_param.shape[0], new_param.shape[0])),
-                            slice(0, min(base_cols, old_param.shape[1], new_param.shape[1])),
-                        )
-                    elif key == "critic.0.weight":
-                        base_cols = self.stage.num_critic_observations - getattr(self.stage, "num_goal_obs", 0)
-                        slices = (
-                            slice(0, min(old_param.shape[0], new_param.shape[0])),
-                            slice(0, min(base_cols, old_param.shape[1], new_param.shape[1])),
-                        )
-                    new_param[slices] = old_param[slices]
-                partial_keys.append(f"{key} {list(old_param.shape)}→{list(new_param.shape)}")
+                loaded_keys.append(param_name)
+                continue
+
+            with torch.no_grad():
+                new_param.zero_()
+                copy_slices = tuple(
+                    slice(0, min(old_size, new_size))
+                    for old_size, new_size in zip(old_param.shape, new_param.shape)
+                )
+                if param_name == "actor.0.weight":
+                    base_feature_dim = self.stage.num_proprio_obs + self.stage.num_scan
+                    copy_slices = (
+                        slice(0, min(old_param.shape[0], new_param.shape[0])),
+                        slice(0, min(base_feature_dim, old_param.shape[1], new_param.shape[1])),
+                    )
+                elif param_name == "critic.0.weight":
+                    base_feature_dim = self.stage.num_critic_observations - getattr(
+                        self.stage,
+                        "num_goal_obs",
+                        0,
+                    )
+                    copy_slices = (
+                        slice(0, min(old_param.shape[0], new_param.shape[0])),
+                        slice(0, min(base_feature_dim, old_param.shape[1], new_param.shape[1])),
+                    )
+                new_param[copy_slices] = old_param[copy_slices]
+            partial_keys.append(
+                f"{param_name} {list(old_param.shape)} -> {list(new_param.shape)}"
+            )
 
         model.load_state_dict(current_state)
 
-        self.logger.info(
-            f"Partial load model {model_file_path}: "
-            f"{len(loaded_keys)} exact, {len(partial_keys)} partial, {len(skipped_keys)} skipped"
-        )
-        for info in partial_keys:
-            self.logger.info(f"  Partial: {info}")
+        if self.logger is not None:
+            self.logger.info(
+                f"Partial load model {model_file_path}: "
+                f"{len(loaded_keys)} exact, {len(partial_keys)} partial, {len(skipped_keys)} skipped"
+            )
+            for partial_info in partial_keys:
+                self.logger.info(f"  Partial: {partial_info}")

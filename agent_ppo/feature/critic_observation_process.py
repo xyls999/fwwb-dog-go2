@@ -1,12 +1,12 @@
 # -*- coding: UTF-8 -*-
 ###########################################################################
-# Copyright 漏 1998 - 2026 Tencent. All Rights Reserved.
+# Copyright  1998 - 2026 Tencent. All Rights Reserved.
 ###########################################################################
 """Critic observation processor."""
 
 import torch
 
-from agent_ppo.conf.conf import Config
+from agent_ppo.conf.conf import WkRuntimeConfig
 from tools.base_env.observation_process import ObservationProcess
 
 
@@ -14,8 +14,8 @@ class CriticObservationProcess(ObservationProcess):
     target_group = "critic"
     _BASE_OBS_DIM = 316
 
-    def _goal_features(self):
-        feature_dim = getattr(Config.CURRENT, "num_goal_obs", 0)
+    def _wk_goal_features(self):
+        feature_dim = getattr(WkRuntimeConfig.CURRENT, "num_goal_obs", 0)
         if feature_dim <= 0:
             return None
 
@@ -54,7 +54,7 @@ class CriticObservationProcess(ObservationProcess):
                 f"Critic observation dim mismatch: expected base {self._BASE_OBS_DIM}, got {obs.shape[-1]}."
             )
 
-        goal_features = self._goal_features()
+        goal_features = self._wk_goal_features()
         if goal_features is not None:
             obs = self.concatenate_terms(obs, goal_features)
         return obs

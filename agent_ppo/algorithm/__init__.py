@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 ###########################################################################
-# Copyright © 1998 - 2026 Tencent. All Rights Reserved.
+# Copyright (c) 1998 - 2026 Tencent. All Rights Reserved.
 ###########################################################################
 """
-Agent PPO Algorithm Module — lite baseline.
-Agent PPO 算法模块 — lite baseline。
+Algorithm package exports for the PPO baseline.
 
-Lite baseline only ships PPO; if players need other algorithms
-(e.g. distillation, LBC), they can add them on their own.
-Lite baseline 仅预置 PPO；选手如需其他算法（如蒸馏、LBC），可自行添加。
+The current baseline only exposes PPO. Additional algorithms can be added
+under this package later without changing the public import path.
 """
 
-from .algorithm_ppo import AlgorithmPPO
+from .algorithm_ppo import WkPPOTrainer
+
+AlgorithmPPO = WkPPOTrainer
 
 __all__ = [
+    "WkPPOTrainer",
     "AlgorithmPPO",
 ]

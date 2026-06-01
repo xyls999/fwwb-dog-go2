@@ -9,10 +9,10 @@ Author: Tencent AI Arena Authors
 
 from kaiwudrl.common.utils.train_test_utils import run_train_test
 
-# To run the train_test, you must modify the algorithm name here. It must be one of ppo, diy.
-# Simply modify the value of the algorithm_name variable.
-# 运行train_test前必须修改这里的算法名字, 必须是ppo、diy里的一个, 修改algorithm_name的值即可
-algorithm_name_list = ["ppo", "diy"]
+# Note: To run train_test, apply the PPO agent configured in conf/algo_conf_legged_robot_competition_26.toml.
+# Note: Simply modify the value of the algorithm_name variable.
+# 说明：本工程维持 PPO 主线，尽量防止读取已经移除的实验 agent。
+algorithm_name_list = ["ppo"]
 algorithm_name = "ppo"
 
 

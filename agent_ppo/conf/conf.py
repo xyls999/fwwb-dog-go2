@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 ###########################################################################
-# Copyright © 1998 - 2026 Tencent. All Rights Reserved.
+# Copyright 1998 - 2026 Tencent. All Rights Reserved.
 ###########################################################################
 """
-Author: Tencent AI Arena Authors
+Stage and environment configuration entrypoint for agent_ppo.
 """
 
+
+from __future__ import annotations
 
 import os
 
@@ -17,45 +19,28 @@ except ModuleNotFoundError:
     import tomllib
 
 
-# Valid task types (Isaac Lab native config format)
-# 有效任务类型（Isaac Lab 原生配置格式）
-_VALID_TASKS = {"standard", "track"}
+VALID_TASK_TYPES = {"standard", "track"}
 
 
-class StageConfig:
-    """
-    Base class for training stage configuration.
-    训练阶段配置基类。
+class WkStageConfig:
+    """Base class for one PPO training stage."""
 
-    Subclass this and override fields to define a new training stage.
-    继承此类并覆盖字段来定义新的训练阶段。
-    """
-
-    # --- Stage identity
-    # 阶段标识 ---
     name = ""
     task_type = "standard"
 
-    # --- Model architecture dimensions (Isaac Lab Unitree-Go2-Velocity constants)
-    # These are fixed by the Isaac Lab task definition and the network structure;
-    # users are not expected to change them. Do NOT move them into user TOML.
-    # 模型架构维度（Isaac Lab Unitree-Go2-Velocity 常量）
-    # 由 Isaac Lab 任务定义与网络结构决定，用户不应修改；也不应放进用户 TOML。
-    num_actions = 12  # Go2 joint action dim / Go2 关节动作维度
-    num_proprio_obs = 45  # proprioceptive obs dim / 本体感知观测维度
-    num_scan = 256  # 16x16 height-scan dim / 16x16 高度扫描维度
+    # Note: Model architecture dimensions come from the Isaac Lab task definition and
+    # Note: should stay in Python instead of user TOML so model shapes stay steady.
+    num_actions = 12
+    num_proprio_obs = 45
+    num_scan = 256
     num_goal_obs = 0
-    num_critic_observations = 316  # proprio(45) + scan(256) + privileged(15)
+    num_critic_observations = 316
 
-    # --- Model architecture
-    # 模型架构 ---
-    model_class = "ActorCritic"
+    model_class = "WkActorCritic"
     actor_hidden_dims = [512, 256, 128]
     critic_hidden_dims = [512, 256, 128]
     activation = "elu"
 
-    # --- Training hyperparameters
-    # 训练超参数 ---
     lr = 3e-4
     num_learning_epochs = 5
     num_mini_batches = 4
@@ -67,56 +52,22 @@ class StageConfig:
     min_normalized_std = [0.05, 0.02, 0.05] * 4
     max_normalized_std = [1.2, 0.8, 1.2] * 4
 
-    # --- Saving
-    # 保存 ---
     model_save_interval = 50
 
 
-class CustomConfig(StageConfig):
-    # TODO: you can refer to LocomotionConfig to design your own track-terrain
-    # navigation training stage. The following items need to be specified:
-    # 1. stage name;
-    # 2. task_type;
-    # 3. whether to use hierarchical training;
-    # 4. semantics and dimension of the policy action;
-    # 5. obs dimension (whether to concatenate goal information);
-    # 6. training hyperparameters.
-    #
-    # After adding a new training stage, a corresponding training config file
-    # must be created in the same directory.
-    # Filename convention: train_env_conf_<task_type>_<stage.name>.toml
-    # Refer to train_env_conf_standard_locomotion.toml as an example.
-    #
-    # TODO：可参考 LocomotionConfig 自行设计 track 地形导航训练阶段。
-    # 需要明确：
-    # 1. stage 名称；
-    # 2. task_type；
-    # 3. 是否采用分层训练；
-    # 4. policy action 的语义和维度；
-    # 5. obs 维度（是否拼接 goal 信息）；
-    # 6. 训练超参。
-    #
-    # 新增训练阶段后，需在同目录创建对应训练配置文件。
-    # 文件命名规则：train_env_conf_<task_type>_<stage.name>.toml
-    # 可参考 train_env_conf_standard_locomotion.toml。
-    pass
+class WkCustomStageConfig(WkStageConfig):
+    """Template stage for future custom experiments."""
 
 
-class LocomotionConfig(StageConfig):
-    """
-    Stage: locomotion — learn stable walking on mixed terrain.
-    阶段：locomotion —— 在混合地形上学习稳定行走。
-    """
+class WkLocomotionStageConfig(WkStageConfig):
+    """Stable mixed-terrain locomotion pretraining."""
 
     name = "locomotion"
     task_type = "standard"
 
 
-class StairConservativeConfig(StageConfig):
-    """
-    Stage: stair_conservative ? fine-tune stairs while replaying slopes.
-    ???stair_conservative ?? ??????????????????????????
-    """
+class WkStairConservativeStageConfig(WkStageConfig):
+    """Conservative stair fine-tune while replaying simpler terrain."""
 
     name = "stair_conservative"
     task_type = "standard"
@@ -127,12 +78,8 @@ class StairConservativeConfig(StageConfig):
     model_save_interval = 50
 
 
-class StairInvFineTuneConfig(StageConfig):
-    """
-    Conservative fine-tune for high-level stairs, especially inverse stairs.
-    Keeps the same 301/316 observation dimensions so pretrained Standard models
-    can be loaded without shape mismatch.
-    """
+class WkStairInvFineTuneStageConfig(WkStageConfig):
+    """Fine-tune for higher and inverse stair variants."""
 
     name = "stair_inv_finetune"
     task_type = "standard"
@@ -143,169 +90,135 @@ class StairInvFineTuneConfig(StageConfig):
     model_save_interval = 100
 
 
-class TrackNavConfig(StageConfig):
-    """Track navigation fine-tune from a pretrained locomotion checkpoint."""
+class WkTrackNavStageConfig(WkStageConfig):
+    """Track-navigation fine-tune on top of a pretrained locomotion policy."""
 
     name = "nav"
     task_type = "track"
-    num_goal_obs = 3   # goal direction (2D) + goal distance (1D)
-    num_critic_observations = 319  # 316 + 3
-    lr = 3.0e-5
-    num_learning_epochs = 5
+    num_goal_obs = 3
+    num_critic_observations = 319
+    lr = 1.2e-5
+    num_learning_epochs = 3
     num_mini_batches = 4
     num_steps_per_env = 48
-    clip_param = 0.22
-    entropy_coef = 0.0015
-    desired_kl = 0.0055
+    entropy_coef = 0.0008
+    desired_kl = 0.003
     init_noise_std = 0.80
-    min_normalized_std = [0.06, 0.035, 0.06] * 4
-    max_normalized_std = [0.32, 0.20, 0.32] * 4
+    min_normalized_std = [0.05, 0.025, 0.05] * 4
+    max_normalized_std = [0.24, 0.14, 0.24] * 4
     model_save_interval = 20
 
 
-class Config:
-    """
-    Unified config entry point.
-    统一配置入口。
+class WkRuntimeConfig:
+    """Single configuration entrypoint used by the rest of agent_ppo."""
 
-    Set ``Config.CURRENT`` to a StageConfig subclass, then read
-    hyperparameters via ``Config.CURRENT.lr``, ``Config.CURRENT.num_mini_batches``, etc.
-
-    设置 ``Config.CURRENT`` 为某个 StageConfig 子类，然后通过
-    ``Config.CURRENT.lr``、``Config.CURRENT.num_mini_batches`` 等读取超参数。
-    """
-
-    # Switch stage by changing CURRENT
-    # 通过修改 CURRENT 切换阶段
-    CURRENT = TrackNavConfig
+    CURRENT = WkTrackNavStageConfig
 
     @staticmethod
     def load_conf(logger):
-        """
-        Load user configuration file based on current stage.
-        根据当前阶段加载用户配置文件。
+        """Load the runtime env config for the currently selected stage."""
 
-        Args:
-            logger: logger instance | 日志实例
-
-        Returns:
-            tuple: (usr_conf, usr_conf_file, is_eval, stage)
-        """
         from common_python.config.config_control import CONFIG
         from kaiwudrl.common.utils.kaiwudrl_define import KaiwuDRLDefine
 
-        stage = Config.CURRENT
-        task_type = stage.task_type
+        stage_config = WkRuntimeConfig.CURRENT
+        task_type = stage_config.task_type
 
-        if task_type not in _VALID_TASKS:
+        if task_type not in VALID_TASK_TYPES:
             raise ValueError(
-                f"Invalid task_type '{task_type}' in stage '{stage.name}'. " f"Only {_VALID_TASKS} are supported."
+                f"Invalid task_type '{task_type}' in stage '{stage_config.name}'. "
+                f"Only {VALID_TASK_TYPES} are supported."
             )
 
-        # Determine if it's evaluation mode
-        # 判断是否为评估模式
-        is_eval = False
+        is_eval_mode = False
         if hasattr(CONFIG, "run_mode"):
-            is_eval = CONFIG.run_mode in [
+            is_eval_mode = CONFIG.run_mode in [
                 KaiwuDRLDefine.RUN_MODE_EVAL,
                 KaiwuDRLDefine.RUN_MODE_EXAM,
             ]
 
-        if is_eval:
-            usr_conf_file = f"tools/eval/conf/eval_env_conf.toml"
+        if is_eval_mode:
+            runtime_conf_path = "tools/eval/conf/eval_env_conf.toml"
         else:
-            usr_conf_file = f"agent_ppo/conf/train_env_conf_{task_type}_{stage.name}.toml"
+            runtime_conf_path = f"agent_ppo/conf/train_env_conf_{task_type}_{stage_config.name}.toml"
 
-        usr_conf = _load_conf(usr_conf_file, logger)
+        runtime_conf = wk_load_runtime_env_config(runtime_conf_path, logger)
+        if runtime_conf is None:
+            error_message = f"usr_conf is None, please check {runtime_conf_path}"
+            logger.error(error_message)
+            raise Exception(error_message)
 
-        if usr_conf is None:
-            error_msg = f"usr_conf is None, please check {usr_conf_file}"
-            logger.error(error_msg)
-            raise Exception(error_msg)
-
-        logger.info(f"Stage: {stage.name}, task_type: {task_type}, model: {stage.model_class}")
-
-        return usr_conf, usr_conf_file, is_eval, stage
+        logger.info(
+            f"Stage: {stage_config.name}, task_type: {task_type}, model: {stage_config.model_class}"
+        )
+        return runtime_conf, runtime_conf_path, is_eval_mode, stage_config
 
 
-def _deep_merge(base, override):
-    """
-    Recursively merge override dict into base dict.
-    递归将 override 字典合并到 base 字典中（override 优先）。
+def wk_merge_dicts_recursively(base_dict, override_dict):
+    """Recursively merge override_dict into base_dict."""
 
-    Args:
-        base: Base config dictionary | 基础配置字典
-        override: Override config dictionary | 覆盖配置字典
-
-    Returns:
-        dict: Merged config dictionary
-    """
-    merged = base.copy()
-    for key, value in override.items():
-        if isinstance(value, dict) and isinstance(merged.get(key), dict):
-            merged[key] = _deep_merge(merged[key], value)
+    merged_dict = base_dict.copy()
+    for key, value in override_dict.items():
+        if isinstance(value, dict) and isinstance(merged_dict.get(key), dict):
+            merged_dict[key] = wk_merge_dicts_recursively(merged_dict[key], value)
         else:
-            merged[key] = value
-    return merged
+            merged_dict[key] = value
+    return merged_dict
 
 
-def _load_toml(path):
+def wk_load_toml_file(path):
+    """Load TOML using `toml` when available, else Python's stdlib parser."""
+
     if toml is not None:
-        with open(path, "r", encoding="utf-8") as f:
-            return toml.load(f)
-    with open(path, "rb") as f:
-        return tomllib.load(f)
+        with open(path, "r", encoding="utf-8") as file_obj:
+            return toml.load(file_obj)
+    with open(path, "rb") as file_obj:
+        return tomllib.load(file_obj)
 
 
-def _load_conf(conf_file, logger):
-    """
-    Load config: first load base TOML, then deep-merge user TOML on top.
-    加载配置：先加载 base TOML，再用用户 TOML 覆盖合并。
+def wk_load_runtime_env_config(runtime_conf_path, logger):
+    """Load base env config and overlay the stage-specific runtime config."""
 
-    Base files provide model architecture dimensions (num_actions, num_proprio_obs, etc.)
-    so user configs only need business-tunable parameters.
-    Base 文件提供模型架构维度参数，用户配置只需保留业务可调参数。
-
-    Args:
-        conf_file: Path to the user TOML config file | 用户配置文件路径
-        logger: Logger instance | 日志实例
-
-    Returns:
-        dict: Merged config dictionary, or None on failure
-    """
-    if not os.path.exists(conf_file):
-        logger.error(f"Config file not found: {conf_file}")
+    if not os.path.exists(runtime_conf_path):
+        logger.error(f"Config file not found: {runtime_conf_path}")
         return None
 
-    # Determine base file by mode (eval or train)
-    # 根据模式选择 base 文件（eval 或 train）
-    mode = "eval" if "eval" in conf_file else "train"
-    base_file = os.path.join("tools", "conf", "base", f"{mode}_env_base.toml")
+    config_mode = "eval" if "eval" in runtime_conf_path else "train"
+    base_conf_path = os.path.join("tools", "conf", "base", f"{config_mode}_env_base.toml")
 
-    # Load base config (optional — missing base is not fatal)
-    # 加载 base 配置（可选 — base 缺失不致命）
     base_config = {}
-    if os.path.exists(base_file):
+    if os.path.exists(base_conf_path):
         try:
-            base_config = _load_toml(base_file)
-            logger.info(f"Loaded base config: {base_file}")
-        except Exception as e:
-            logger.warning(f"Cannot load base config: {base_file}. Error: {e}")
+            base_config = wk_load_toml_file(base_conf_path)
+            logger.info(f"Loaded base config: {base_conf_path}")
+        except Exception as exc:
+            logger.warning(f"Cannot load base config: {base_conf_path}. Error: {exc}")
 
-    # Load user config
-    # 加载用户配置
     try:
-        user_config = _load_toml(conf_file)
-        logger.info(f"Loaded user config: {conf_file}")
-    except Exception as e:
-        logger.error(f"Cannot load config file: {conf_file}. Error: {e}")
+        runtime_override_config = wk_load_toml_file(runtime_conf_path)
+        logger.info(f"Loaded user config: {runtime_conf_path}")
+    except Exception as exc:
+        logger.error(f"Cannot load config file: {runtime_conf_path}. Error: {exc}")
         return None
 
-    # Deep merge: base ← user (user wins)
-    # 深度合并：base ← user（用户配置优先）
     if base_config:
-        config = _deep_merge(base_config, user_config)
-    else:
-        config = user_config
+        return wk_merge_dicts_recursively(base_config, runtime_override_config)
+    return runtime_override_config
 
-    return config
+
+# Note: Compatibility aliases for platform-side or older local imports.  The runtime
+# Note: code above uses Wk* names, while these aliases keep the public surface steady.
+Config = WkRuntimeConfig
+StageConfig = WkStageConfig
+CustomConfig = WkCustomStageConfig
+LocomotionConfig = WkLocomotionStageConfig
+StairConservativeConfig = WkStairConservativeStageConfig
+StairInvFineTuneConfig = WkStairInvFineTuneStageConfig
+TrackNavConfig = WkTrackNavStageConfig
+merge_dicts_recursively = wk_merge_dicts_recursively
+load_toml_file = wk_load_toml_file
+load_runtime_env_config = wk_load_runtime_env_config
+_VALID_TASKS = VALID_TASK_TYPES
+_deep_merge = wk_merge_dicts_recursively
+_load_toml = wk_load_toml_file
+_load_conf = wk_load_runtime_env_config

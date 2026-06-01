@@ -1,23 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 ###########################################################################
-# Copyright © 1998 - 2026 Tencent. All Rights Reserved.
+# Copyright 1998 - 2026 Tencent. All Rights Reserved.
 ###########################################################################
 """
-Author: Tencent AI Arena Authors
+Feed-forward actor-critic network used by the legacy PPO pipeline.
 """
+
+from __future__ import annotations
+
+from typing import Any
 
 import torch
 import torch.nn as nn
 from torch.distributions import Normal
-from typing import Any
 
 
-def resolve_nn_activation(activation: str) -> nn.Module:
-    """
-    Get activation function by name
-    根据名称获取激活函数
-    """
+def wk_build_activation_module(activation: str) -> nn.Module:
+    """Return the activation module requested by the stage configuration."""
+
     activation_map = {
         "elu": nn.ELU(),
         "selu": nn.SELU(),
@@ -31,11 +32,14 @@ def resolve_nn_activation(activation: str) -> nn.Module:
     return activation_map[activation]
 
 
-class ActorCritic(nn.Module):
-    """
-    Actor-Critic network with flat tensor interface
-    使用扁平张量接口的Actor-Critic网络
-    """
+def wk_resolve_nn_activation(activation: str) -> nn.Module:
+    """Compatibility alias for older imports."""
+
+    return wk_build_activation_module(activation)
+
+
+class WkActorCritic(nn.Module):
+    """Actor-critic network with flat actor and critic observation tensors."""
 
     is_recurrent = False
 
@@ -54,212 +58,147 @@ class ActorCritic(nn.Module):
         noise_std_type: str = "scalar",
         **kwargs: dict[str, Any],
     ) -> None:
-        """
-        Initialize ActorCritic
-        初始化ActorCritic
+        """Build the actor, critic, and action distribution parameterization."""
 
-        Args:
-            num_obs: Dimension of actor observation
-            num_obs: Actor观测维度
-            num_critic_obs: Dimension of critic observation
-            num_critic_obs: Critic观测维度
-            num_actions: Number of action dimensions
-            num_actions: 动作维度
-            actor_hidden_dims: Hidden layer sizes for actor MLP
-            actor_hidden_dims: Actor MLP隐藏层大小
-            critic_hidden_dims: Hidden layer sizes for critic MLP
-            critic_hidden_dims: Critic MLP隐藏层大小
-            activation: Activation function name
-            activation: 激活函数名称
-            init_noise_std: Initial noise std for exploration
-            init_noise_std: 探索噪声初始标准差
-            noise_std_type: "scalar" or "log"
-            noise_std_type: 标准差类型，"scalar"或"log"
-        """
         super().__init__()
 
-        activation_fn = resolve_nn_activation(activation)
+        activation_module = wk_build_activation_module(activation)
 
-        # Keep recurrent constructor args for API compatibility, but use the
-        # original feed-forward actor so locomotion checkpoints transfer.
+        # Note: The constructor still accepts recurrent arguments so the external
+        # Note: interface stays steady, but the model itself remains feed-forward.
         self._hidden_states = None
 
-        # Build actor MLP
-        # 构建策略网络
-        actor_layers = []
-        actor_layers.append(nn.Linear(num_obs, actor_hidden_dims[0]))
-        actor_layers.append(activation_fn)
-        for i in range(len(actor_hidden_dims)):
-            if i == len(actor_hidden_dims) - 1:
-                actor_layers.append(nn.Linear(actor_hidden_dims[i], num_actions))
+        actor_layers = [nn.Linear(num_obs, actor_hidden_dims[0]), activation_module]
+        for layer_index in range(len(actor_hidden_dims)):
+            if layer_index == len(actor_hidden_dims) - 1:
+                actor_layers.append(nn.Linear(actor_hidden_dims[layer_index], num_actions))
             else:
-                actor_layers.append(nn.Linear(actor_hidden_dims[i], actor_hidden_dims[i + 1]))
-                actor_layers.append(activation_fn)
+                actor_layers.append(
+                    nn.Linear(actor_hidden_dims[layer_index], actor_hidden_dims[layer_index + 1])
+                )
+                actor_layers.append(activation_module)
         self.actor = nn.Sequential(*actor_layers)
 
-        # Build critic MLP (with LayerNorm)
-        # 构建价值网络（含层标准化）
-        critic_layers = []
-        critic_layers.append(nn.Linear(num_critic_obs, critic_hidden_dims[0]))
-        critic_layers.append(activation_fn)
-        for i in range(len(critic_hidden_dims)):
-            if i == len(critic_hidden_dims) - 1:
-                critic_layers.append(nn.Linear(critic_hidden_dims[i], 1))
+        critic_layers = [nn.Linear(num_critic_obs, critic_hidden_dims[0]), activation_module]
+        for layer_index in range(len(critic_hidden_dims)):
+            if layer_index == len(critic_hidden_dims) - 1:
+                critic_layers.append(nn.Linear(critic_hidden_dims[layer_index], 1))
             else:
-                critic_layers.append(nn.Linear(critic_hidden_dims[i], critic_hidden_dims[i + 1]))
-                critic_layers.append(nn.LayerNorm(critic_hidden_dims[i + 1]))
-                critic_layers.append(activation_fn)
+                critic_layers.append(
+                    nn.Linear(
+                        critic_hidden_dims[layer_index],
+                        critic_hidden_dims[layer_index + 1],
+                    )
+                )
+                critic_layers.append(nn.LayerNorm(critic_hidden_dims[layer_index + 1]))
+                critic_layers.append(activation_module)
         self.critic = nn.Sequential(*critic_layers)
 
-        # Action noise initialization
-        # 动作噪声初始化
         self.noise_std_type = noise_std_type
         if noise_std_type == "scalar":
             self.std = nn.Parameter(init_noise_std * torch.ones(num_actions))
         elif noise_std_type == "log":
             self.log_std = nn.Parameter(torch.log(init_noise_std * torch.ones(num_actions)))
         else:
-            raise ValueError(f"Unknown noise_std_type: {noise_std_type}. Should be 'scalar' or 'log'")
+            raise ValueError(
+                f"Unknown noise_std_type: {noise_std_type}. Should be 'scalar' or 'log'"
+            )
 
-        # Action distribution (set by update_distribution)
-        # 动作分布（由update_distribution设置）
         self.distribution = None
-        # Disable args validation for speedup
-        # 禁用分布验证加速
         Normal.set_default_validate_args(False)
 
     @staticmethod
-    def init_weights(sequential, scales):
-        """
-        Initialize weights using orthogonal initialization
-        使用正交初始化方法初始化权重
-        """
+    def wk_init_weights(sequential, scales):
+        """Orthogonally initialize each linear layer in a sequential module."""
+
         [
-            torch.nn.init.orthogonal_(module.weight, gain=scales[idx])
-            for idx, module in enumerate(mod for mod in sequential if isinstance(mod, nn.Linear))
+            torch.nn.init.orthogonal_(module.weight, gain=scales[index])
+            for index, module in enumerate(
+                module for module in sequential if isinstance(module, nn.Linear)
+            )
         ]
 
     def reset(self, dones=None):
-        """
-        Reset hidden states for terminated episodes
-        重置已终止episode的隐藏状态
-        """
+        """Compatibility hook for recurrent models."""
+
         pass
 
     def get_hidden_states(self):
+        """Compatibility hook for recurrent models."""
+
         return None
 
     def set_hidden_states(self, hidden_states):
+        """Compatibility hook for recurrent models."""
+
         self._hidden_states = None
 
     def forward(self):
-        """
-        Forward pass (not implemented, use act/evaluate instead)
-        前向传播（未实现，请使用act/evaluate方法）
-        """
+        """The legacy interface uses act/evaluate instead of forward()."""
+
         raise NotImplementedError
 
     @property
     def action_mean(self):
-        """
-        Get mean of action distribution
-        获取动作分布的均值
-        """
+        """Expose the current policy mean after update_distribution()."""
+
         return self.distribution.mean
 
     @property
     def action_std(self):
-        """
-        Get standard deviation of action distribution
-        获取动作分布的标准差
-        """
+        """Expose the current policy standard deviation."""
+
         return self.distribution.stddev
 
     @property
     def entropy(self):
-        """
-        Get entropy of action distribution
-        获取动作分布的熵
-        """
+        """Return the summed action entropy per environment."""
+
         return self.distribution.entropy().sum(dim=-1)
 
-    def update_distribution(self, obs: torch.Tensor, hidden_states=None, masks: torch.Tensor | None = None):
-        """
-        Update action distribution based on observations
-        基于观测更新动作分布
+    def update_distribution(
+        self,
+        obs: torch.Tensor,
+        hidden_states=None,
+        masks: torch.Tensor | None = None,
+    ):
+        """Build the action distribution from a batch of actor observations."""
 
-        Args:
-            obs: [B, num_obs] flat actor observation tensor
-            obs: [B, num_obs] Actor观测张量
-        """
         if obs.dim() != 2:
             raise ValueError(f"Actor observation must be 2D [B, num_obs], got shape {tuple(obs.shape)}")
-        mean = self.actor(obs)
+
+        action_mean = self.actor(obs)
         if self.noise_std_type == "scalar":
-            std = self.std.clamp(min=1e-6).expand_as(mean)
+            action_std = self.std.clamp(min=1e-6).expand_as(action_mean)
         elif self.noise_std_type == "log":
-            std = torch.exp(self.log_std).expand_as(mean)
+            action_std = torch.exp(self.log_std).expand_as(action_mean)
         else:
             raise ValueError(f"Unknown noise_std_type: {self.noise_std_type}")
-        self.distribution = Normal(mean, std)
+
+        self.distribution = Normal(action_mean, action_std)
 
     def act(self, obs: torch.Tensor, **kwargs) -> torch.Tensor:
-        """
-        Sample actions from policy distribution
-        从策略分布中采样动作
+        """Sample stochastic actions for rollout collection."""
 
-        Args:
-            obs: [B, num_obs]
-            obs: [B, num_obs] 观测张量
-
-        Returns:
-            actions: [B, num_actions]
-            返回值：[B, num_actions] 动作张量
-        """
         self.update_distribution(obs)
         return self.distribution.sample()
 
     def act_inference(self, obs: torch.Tensor) -> torch.Tensor:
-        """
-        Deterministic action (mean) for inference
-        推理时的确定性动作（均值）
+        """Return deterministic mean actions for evaluation."""
 
-        Args:
-            obs: [B, num_obs]
-            obs: [B, num_obs] 观测张量
-
-        Returns:
-            actions: [B, num_actions]
-            返回值：[B, num_actions] 动作张量
-        """
         return self.actor(obs)
 
     def evaluate(self, critic_obs: torch.Tensor, **kwargs) -> torch.Tensor:
-        """
-        Evaluate state value using critic network
-        使用critic网络评估状态价值
+        """Estimate state values from critic observations."""
 
-        Args:
-            critic_obs: [B, num_critic_obs]
-            critic_obs: [B, num_critic_obs] Critic观测张量
-
-        Returns:
-            values: [B, 1]
-            返回值：[B, 1] 状态价值
-        """
         return self.critic(critic_obs)
 
     def get_actions_log_prob(self, actions: torch.Tensor) -> torch.Tensor:
-        """
-        Compute log probability of actions under current distribution
-        计算动作在当前分布下的对数概率
+        """Return the log probability of sampled actions under the current policy."""
 
-        Args:
-            actions: [B, num_actions]
-            actions: [B, num_actions] 动作张量
-
-        Returns:
-            log_prob: [B]
-            返回值：[B] 对数概率
-        """
         return self.distribution.log_prob(actions).sum(dim=-1)
+
+
+ActorCritic = WkActorCritic
+build_activation_module = wk_build_activation_module
+resolve_nn_activation = wk_resolve_nn_activation

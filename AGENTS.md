@@ -4,8 +4,7 @@
 
 This repository contains a Tencent AI Arena KaiwuDRL project for Unitree Go2 quadruped reinforcement learning in Isaac Lab.
 
-- `agent_ppo/`: PPO agent, flat actor-critic model, navigation helpers, rewards, training workflow, and stage TOML configs.
-- `agent_diy/`: hybrid CPG + RL residual + reflex agent with its own model, rewards, and workflow.
+- `agent_ppo/`: PPO agent, flat actor-critic model, rewards, training workflow, and stage TOML configs.
 - `conf/`: global KaiwuDRL application, algorithm, replay buffer, and model dump configuration.
 - `isaac_env/`: Isaac Lab environment wrapper and TOML-to-env configuration merge logic.
 - `ckpt/`: local checkpoint files and checkpoint metadata.
@@ -21,7 +20,7 @@ Run commands from the repository root. The real simulator stack is Linux-only an
 python train_test.py
 ```
 
-Runs a smoke test through the KaiwuDRL framework. Edit `train_test.py` to switch `algorithm_name` between `"ppo"` and `"diy"`.
+Runs a smoke test through the KaiwuDRL framework. The cleaned project keeps the `"ppo"` training path.
 
 ```bash
 python evaluate_pareto.py scores.jsonl --forward-threshold 90 --top-k 10 --plot
@@ -48,4 +47,4 @@ Pull requests should describe the changed agent or stage, list relevant config f
 
 ## Security & Configuration Tips
 
-Do not commit secrets or platform credentials. Local sync tools such as `ide_sync_server.py` and `codex_rpc_bridge/` are intended for trusted local or IDE-container use only.
+Do not commit secrets or platform credentials. Local sync tools and generated runtime artifacts should stay outside the submitted project tree.

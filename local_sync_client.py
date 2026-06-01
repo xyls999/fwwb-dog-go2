@@ -58,13 +58,13 @@ DEFAULT_COOKIE_FILE = Path.home() / ".fwwb_ide_proxy_cookie"
 DEFAULT_PROXY_COOKIE_NAME = "kaiwu-token"
 PROXY_COOKIE_NAME_ALIASES = ("kaiwu-token", "kaiwu_token")
 
-# Paste your Tencent Arena Cookie here if terminal paste is inconvenient.
-# 如果终端里不好粘贴 Cookie，就把完整 Cookie 或 kaiwu-token 的值填到这里。
-# Example / 示例：
-# USER_PROXY_COOKIE = "你的 kaiwu-token Cookie Value"
-# USER_PROXY_COOKIE = "kaiwu-token=..."
-# USER_PROXY_COOKIE = "DXUSS=...; Hm_lvt_xxx=...; kaiwu-token=...; select_lang=zh"
-USER_PROXY_COOKIE = "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3Nzk5NzczMzYuNzgzMzUyMSwiaWF0IjoxNzc5MzcyNTM2Ljc4MzM1MjEsImlzcyI6ImthaXd1IiwiY3VzdG9tIjo0NDM5M30.62lKdjymWZpojfBzzj5ktELpWhxI5FIs4XSRtNdjJiT8kyaI831vNNHBc21vQFgjHDN-pjbpnNe2QogFCwUmLA"
+# Note: Paste your Tencent Arena Cookie here if terminal paste is inconvenient.
+# 说明：如果终端里不好粘贴 Cookie，就把完整 Cookie 或 kaiwu-token 的值填到这里。
+# 说明：Example / 示例：
+# 说明：USER_PROXY_COOKIE = "你的 kaiwu-token Cookie Value"
+# Note: USER_PROXY_COOKIE = "kaiwu-token=..."
+# Note: USER_PROXY_COOKIE = "DXUSS=...; Hm_lvt_xxx=...; kaiwu-token=...; select_lang=zh"
+USER_PROXY_COOKIE = "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODA1ODI0MzAuNTAzMDQ0MSwiaWF0IjoxNzc5OTc3NjMwLjUwMzA0NDEsImlzcyI6ImthaXd1IiwiY3VzdG9tIjo0NDM5M30.R0LvBb4EfCrXXI-83yjUUaJLNQM-YyNFS0EbWkiVWh5KUVjU0HYwEntV8jGDXiaFlgco3Gw9wvgSqGBNoSMx6Q"
 
 
 class TencentProxyAuthError(RuntimeError):
@@ -207,11 +207,11 @@ def normalize_cookie_input(raw_cookie: str, cookie_name: str) -> str:
         cookie = cookie.split(":", 1)[1].strip()
     cookie = cookie.strip().strip('"').strip("'")
 
-    # Full Cookie header / 完整 Cookie 头：原样使用。
+    # 说明：Full Cookie header / 完整 Cookie 头：原样采用。
     if ";" in cookie:
         return cookie
 
-    # Single name=value / 单个 name=value：名字像正常 Cookie 名时原样使用。
+    # 说明：Single name=value / 单个 name=value：名字像正常 Cookie 名时原样采用。
     if "=" in cookie:
         name, value = cookie.split("=", 1)
         name = name.strip()
@@ -219,7 +219,7 @@ def normalize_cookie_input(raw_cookie: str, cookie_name: str) -> str:
         if name in PROXY_COOKIE_NAME_ALIASES or (name and "." not in name and len(name) <= 80):
             return f"{name}={value}"
 
-    # Bare value / 只有 value：同时带两种常见名字，兼容 kaiwu-token / kaiwu_token。
+    # 说明：Bare value / 只有 value：同时带两种常见名字，兼容 kaiwu-token / kaiwu_token。
     names = tuple(dict.fromkeys((cookie_name, *PROXY_COOKIE_NAME_ALIASES)))
     return "; ".join(f"{name}={cookie}" for name in names)
 

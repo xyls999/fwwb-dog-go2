@@ -1,507 +1,386 @@
+# -----------------------------------------------------------------------------
+# Note: Track Nav Pure RL
+# 说明：这份设定是此处 PPO Track 导航学习主设定。
+# 说明：策略直接产出 12 个关节动作；速率指令只作为“向前走/跑”的锚点。
+# 说明：找终点、避墙、穿迷宫段、完成赛道，主要靠下面的 reward 学出来。
+# -----------------------------------------------------------------------------
+
+[env] # 说明：环境基础设置：控制并发环境数量和单局时长。
+num_envs = 4096 # 说明：并发学习环境数量；赛题环境学习上限为 4096，提高到上限以增大每轮取样规模。
+episode_length_s = 120.0 # 说明：单个 episode 最长 120 秒；超时会结束本回合。
+
+[env_conf] # 说明：运行时通用设定。
+seed = 0 # 说明：随机化种子；固定后方便复现实验趋势。
+
+[terrain] # 说明：赛道地貌总设定。
+mode = "track" # 说明：采用 Track 赛道模式，不是 standard 单地形模式。
+num_rows = 10 # 说明：学习赛道地貌难度行数；10 行通常对应 0-9 难度。
+num_cols = 10 # 说明：每个难度/赛道地貌列数量；影响并发环境分布。
+difficulty_range = [0.0, 1.0] # 说明：赛道地貌难度覆盖完整区间；0 最简单，1 最难。
+curriculum = false # 说明：停用官方赛道地貌课程；不让环境自动从简单逐步升难。
+max_init_terrain_level = 0 # 说明：初始赛道地貌等级；停用课程时主要作为兼容字段。
+
+[terrain.standard] # 说明：standard 模式备用设定；此处 track 模式基本不采用。
+sub_terrains = ["pyramid_slope", "pyramid_slope_inv", "pyramid_stairs", "pyramid_stairs_inv", "maze"] # 说明：standard 备用赛道地貌列表：正反坡、正反台阶、maze 段。
+
+[terrain.level_mix] # 说明：自定义难度混合设定，用来控制各难度取样比例。
+enabled = true # 说明：启用难度混合，让学习不是只集中到某几个难度。
+levels = [0, 1, 3, 4, 5, 6, 7, 8, 9] # 说明：参与学习的难度；这里跳过 2，维持 0/1/3-9。
+weights = [0.050, 0.060, 0.080, 0.095, 0.115, 0.140, 0.160, 0.150, 0.150] # 说明：每个难度的取样系数；高难度略多但不完全压死低难度。
+pool_size = 200 # 说明：难度池大小；越大取样分布越平滑。
+
+[terrain.track] # 说明：Track 赛道结构设定。
+track_length = 5 # 说明：赛道串联 5 段赛道地貌。
+sub_terrains = ["pyramid_slope", "pyramid_slope_inv", "pyramid_stairs", "pyramid_stairs_inv", "open_entry_maze"] # 说明：Track 固定顺序：上/下坡、上/下台阶、最后 open_entry_maze。
+
+[domain_rand] # 说明：域随机化设定，用来提升泛化能力。
+enable_domain_rand = true # 说明：启用域随机化。
+randomize_friction = true # 说明：随机化摩擦系数，尽量防止只适应单一地面。
+friction_range = [0.45, 1.4] # 说明：摩擦区间；低摩擦更滑，高摩擦更稳。
+push_robots = false # 说明：不随机化推机器人；此处优先平稳学习，不额外加扰动。
+push_interval_s = 15 # 说明：如果启用 push，每 15 秒推一次；此处 push_robots=false，所以不生效。
+max_push_vel_xy = 0.5 # 说明：如果启用 push，最大水平推速率；此处不生效。
+
+[noise] # 说明：输入观测噪声设定。
+add_noise = true # 说明：给输入观测加噪声，提升策略鲁棒性。
+
+[init_state] # 说明：初始状态设定。
+pos = [0.0, 0.0, 0.35] # 说明：初始躯干位置；z=0.35 米，尽量防止出生太低或太高。
+
 # =============================================================================
-# Track Nav Pure RL
-#
-# The policy controls all joint actions directly.  The velocity command is only
-# a locomotion anchor: "walk forward in the head/body direction".  Goal seeking,
-# wall avoidance, exploration, and maze solving are learned from reward.
+# Note: Commands
+# 说明：速率指令只当作步态锚点：让狗知道“应该往前动”，真正导航靠终点/墙回报。
 # =============================================================================
-
-[env]
-num_envs = 3072
-episode_length_s = 120.0
-
-[env_conf]
-seed = 0
-
-[terrain]
-mode = "track"
-num_rows = 10
-num_cols = 10
-difficulty_range = [0.0, 1.0]
-curriculum = false
-max_init_terrain_level = 0
-
-[terrain.level_mix]
-enabled = false
-levels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-weights = [0.45, 0.25, 0.15, 0.07, 0.035, 0.02, 0.015, 0.005, 0.003, 0.002]
-pool_size = 100
-
-[terrain.track]
-# Full track: slopes and stairs first, maze only at the final segment.
-track_length = 5
-sub_terrains = ["pyramid_slope", "pyramid_slope_inv", "pyramid_stairs", "pyramid_stairs_inv", "open_entry_maze"]
-
-[domain_rand]
-enable_domain_rand = true
-randomize_friction = true
-friction_range = [0.45, 1.4]
-push_robots = false
-push_interval_s = 15
-max_push_vel_xy = 0.5
-
-[noise]
-add_noise = true
-
-[init_state]
-pos = [0.0, 0.0, 0.35]
-
-# Periodic forward command: keep the gait head-forward, but let RL learn yaw and
-# maze navigation from goal / wall rewards.
-[commands]
-resampling_time = [2.5, 4.0]
-
-[commands.limit]
-lin_vel_x = [0.0, 1.0]
-lin_vel_y = [-0.0, 0.0]
-ang_vel_z = [-1.2, 1.2]
-
-[commands.ranges]
-lin_vel_x = [0.55, 0.80]
-lin_vel_y = [0.0, 0.0]
-ang_vel_yaw = [0.0, 0.0]
-
-[navigation]
-enabled = false
-
-[rl_navigation]
-phase_command_enabled = true
-pre_maze_lin_vel_x = [2.85, 3.30]
-slope_lin_vel_x = [2.55, 3.05]
-stairs_lin_vel_x = [2.15, 2.65]
-maze_lin_vel_x = [1.85, 2.25]
-phase_maze_goal_dist_gate = 14.0
-phase_command_resample_steps = 160
-terrain_phase_speed_enabled = true
-terrain_row_start = 3
-terrain_row_end = 13
-terrain_front_cols = 8
-terrain_step_quantile = 0.85
-terrain_lateral_std_threshold = 0.18
-terrain_wall_height_threshold = -1.05
-terrain_slope_delta_threshold = 0.035
-terrain_stair_delta_threshold = 0.10
-terrain_stair_second_diff_threshold = 0.055
-terrain_slope_sign_consistency_threshold = 0.55
-maze_anticipate_obstacle_threshold = -0.72
-maze_anticipate_temperature = 0.18
-maze_anticipate_front_cols = 8
-maze_anticipate_body_y_start = 3
-maze_anticipate_body_y_end = 13
-maze_anticipate_side_width = 4
-maze_anticipate_wall_start = 0.20
-maze_anticipate_wall_full = 0.72
-maze_anticipate_min_speed_scale = 1.0
-maze_anticipate_yaw_cmd = 0.85
-
-# Eval adapter for wide platform command ranges such as:
-# lin_vel_x=[0.0,1.7], lin_vel_y=[-1,1], ang_vel_z=[-1.8,1.8].
-# The maze policy should not chase those random commands; it uses goal + scan
-# for navigation and sees this stable forward command as a gait anchor.
-eval_command_override = true
-eval_command = [2.80, 0.0, 0.0]
-
-# -----------------------------------------------------------------------------
-# Locomotion preservation: keep enough of the old walking objective so the
-# pretrained model does not forget stable gait while learning navigation.
-# -----------------------------------------------------------------------------
-[rewards.track_lin_vel_xy]
-weight = 2.10
-[rewards.track_lin_vel_xy.params]
-std = 0.55
-command_name = "base_velocity"
-
-[rewards.command_speed_advantage]
-weight = 0.55
-[rewards.command_speed_advantage.params]
-command_name = "base_velocity"
-deadband = 0.04
-surplus_scale = 0.22
-lag_scale = 0.32
-max_surplus = 0.25
-max_lag = 0.85
-lag_penalty_scale = 0.65
-min_command = 0.10
-
-[rewards.track_ang_vel_z]
-weight = 0.08
-[rewards.track_ang_vel_z.params]
-std = 0.45
-command_name = "base_velocity"
-
-[rewards.lin_vel_z]
-weight = -0.68
-
-[rewards.ang_vel_xy]
-weight = -0.78
-
-[rewards.joint_acc]
-weight = -5.5e-7
-
-[rewards.energy]
-weight = -8.0e-5
-
-[rewards.energy_score_formula]
-weight = 1.55
-
-[rewards.joint_torques]
-weight = -1.0e-4
-
-[rewards.dof_pos_limits]
-weight = -0.3
-
-[rewards.correct_base_height]
-weight = -0.34
-[rewards.correct_base_height.params]
-target_height = 0.38
-
-[rewards.action_rate]
-weight = -0.020
-
-[rewards.action_smoothness]
-weight = -0.024
-
-[rewards.undesired_contacts]
-weight = -0.3
-[rewards.undesired_contacts.params]
-threshold = 1
-
-[rewards.termination]
-weight = -5.0
-
-[rewards.non_completion_timeout]
-weight = -100.0
-
-[rewards.flat_orientation]
-weight = -1.75
-
-[rewards.pose_score_formula]
-weight = 3.10
-
-[rewards.posture_stability]
-weight = -1.15
-
-[rewards.hip_to_default]
-weight = -0.12
-
-[rewards.joint_position_penalty]
-weight = -0.09
-[rewards.joint_position_penalty.params]
-stand_still_scale = 2.0
-cmd_threshold = 0.10
-ang_cmd_threshold = 0.20
-
-[rewards.stand_still_motion]
-weight = -0.85
-[rewards.stand_still_motion.params]
-command_name = "base_velocity"
-lin_cmd_threshold = 0.15
-ang_cmd_threshold = 0.20
-vertical_vel_scale = 0.5
-ang_vel_scale = 0.5
-joint_vel_scale = 0.1
-
-[rewards.commanded_still_penalty]
-weight = -0.55
-[rewards.commanded_still_penalty.params]
-command_name = "base_velocity"
-cmd_threshold = 0.08
-still_speed_threshold = 0.12
-
-[rewards.feet_air_time]
-weight = 0.55
-[rewards.feet_air_time.params]
-command_name = "base_velocity"
-threshold = 0.22
-
-[rewards.feet_slide]
-weight = -0.18
-
-[rewards.feet_stumble]
-weight = -0.08
-
-[rewards.dof_vel]
-weight = -3.5e-4
-
-[rewards.base_lateral_vel]
-weight = -0.32
-
-[rewards.air_time_variance_penalty]
-weight = -0.44
-
-[rewards.feet_clearance]
-weight = 0.22
-[rewards.feet_clearance.params]
-command_name = "base_velocity"
-target_height = 0.12
-std = 0.07
-terrain_height_scale = 0.85
-max_terrain_extra_height = 0.14
-speed_height_scale = 0.020
-body_y_start = 5
-body_y_end = 11
-near_x_start = 2
-near_x_end = 10
-delta_quantile = 0.85
-
-[rewards.feet_swing_forward]
-weight = 0.25
-[rewards.feet_swing_forward.params]
-command_name = "base_velocity"
-target_forward = 0.22
-std = 0.10
-min_command = 0.80
-
-[rewards.running_speed_band]
-weight = 2.40
-[rewards.running_speed_band.params]
-command_name = "base_velocity"
-min_speed = 1.50
-target_speed = 2.65
-max_speed = 3.35
-posture_limit = 0.26
-
-[rewards.running_stride_span]
-weight = 0.75
-[rewards.running_stride_span.params]
-command_name = "base_velocity"
-target_span = 0.72
-std = 0.18
-min_command = 1.50
-min_body_speed = 1.35
-
-[rewards.running_contact_pattern]
-weight = 0.55
-[rewards.running_contact_pattern.params]
-command_name = "base_velocity"
-target_contacts = 2.0
-contact_std = 0.80
-min_command = 1.50
-min_body_speed = 1.35
-
-[rewards.running_air_time_band]
-weight = 0.45
-[rewards.running_air_time_band.params]
-command_name = "base_velocity"
-min_air_time = 0.12
-target_air_time = 0.28
-max_air_time = 0.50
-min_command = 1.50
-
-[rewards.running_speed_efficiency]
-weight = 0.80
-[rewards.running_speed_efficiency.params]
-command_name = "base_velocity"
-target_speed = 2.55
-power_scale = 100.0
-min_command = 1.50
-
-[rewards.score_guidance]
-weight = 1.20
-[rewards.score_guidance.params]
-command_name = "base_velocity"
-min_command = 0.15
-tracking_std = 0.70
-posture_std = 0.25
-power_scale = 100.0
-posture_weight = 0.67
-
-[rewards.rough_score_guidance]
-weight = 0.85
-[rewards.rough_score_guidance.params]
-command_name = "base_velocity"
-min_command = 0.15
-tracking_std = 1.00
-posture_weight = 0.67
-body_y_start = 4
-body_y_end = 12
-near_x_start = 1
-near_x_end = 10
-delta_quantile = 0.85
-min_delta = 0.025
-full_delta = 0.12
-
-[rewards.rough_ang_vel_xy]
-weight = -0.060
-[rewards.rough_ang_vel_xy.params]
-body_y_start = 4
-body_y_end = 12
-near_x_start = 1
-near_x_end = 10
-delta_quantile = 0.85
-min_delta = 0.025
-full_delta = 0.12
-
-[rewards.rough_roll_pitch_abs]
-weight = -0.135
-[rewards.rough_roll_pitch_abs.params]
-body_y_start = 4
-body_y_end = 12
-near_x_start = 1
-near_x_end = 10
-delta_quantile = 0.85
-min_delta = 0.025
-full_delta = 0.12
-
-[rewards.rough_energy]
-weight = -1.2e-5
-[rewards.rough_energy.params]
-body_y_start = 4
-body_y_end = 12
-near_x_start = 1
-near_x_end = 10
-delta_quantile = 0.85
-min_delta = 0.025
-full_delta = 0.12
-
-# -----------------------------------------------------------------------------
-# Pure RL navigation objective.
-# 主目标：完成完整 track；辅助目标：头朝前走、朝目标推进。
-# 墙体相关奖励只在最后 maze 区域且扫描到连续墙时启用，避免把楼梯当墙绕开。
-# -----------------------------------------------------------------------------
-[rewards.forward_heading_velocity]
-weight = 2.60
-[rewards.forward_heading_velocity.params]
-target_speed = 2.45
-max_reward = 1.20
-
-[rewards.backward_penalty]
-weight = -2.5
-[rewards.backward_penalty.params]
-deadband = 0.03
-
-[rewards.goal_heading_alignment]
-weight = 1.0
-[rewards.goal_heading_alignment.params]
-std = 0.75
-
-[rewards.goal_velocity_projection]
-weight = 5.60
-[rewards.goal_velocity_projection.params]
-max_speed = 2.70
-
-[rewards.goal_backtrack_penalty]
-weight = -3.0
-[rewards.goal_backtrack_penalty.params]
-deadband = 0.02
-
-[rewards.approach_goal]
-weight = 12.0
-
-[rewards.goal_distance]
-weight = 0.8
-[rewards.goal_distance.params]
-scale = 8.0
-
-[rewards.reach_goal]
-weight = 35.0
-[rewards.reach_goal.params]
-threshold = 0.6
-
-[rewards.task_complete]
-weight = 140.0
-[rewards.task_complete.params]
-threshold = 0.6
-
-[rewards.navigation_time]
-weight = -0.075
-
-[rewards.maze_context_gate]
-weight = 0.0
-[rewards.maze_context_gate.params]
-goal_dist_gate = 14.0
-obstacle_threshold = -0.80
-temperature = 0.18
-front_cols = 10
-
-[rewards.maze_anticipatory_turn]
-weight = 0.95
-[rewards.maze_anticipatory_turn.params]
-obstacle_threshold = -0.72
-temperature = 0.18
-front_cols = 8
-body_y_start = 3
-body_y_end = 13
-side_width = 4
-wall_start = 0.20
-wall_full = 0.72
-target_yaw_rate = 0.85
-target_forward_speed = 1.15
-maze_goal_dist_gate = 14.0
-maze_gate_obstacle_threshold = -0.80
-
-[rewards.wall_collision]
-weight = -14.0
-[rewards.wall_collision.params]
-obstacle_threshold = -0.75
-front_cols = 3
-body_y_start = 3
-body_y_end = 13
-wall_score_threshold = 0.55
-temperature = 0.18
-touch_penalty = 0.12
-slow_speed = 0.15
-impact_speed = 0.55
-impact_penalty = 2.00
-maze_goal_dist_gate = 14.0
-maze_gate_obstacle_threshold = -0.80
-
-[rewards.wall_stall_penalty]
-weight = -1.4
-[rewards.wall_stall_penalty.params]
-obstacle_threshold = -0.70
-front_cols = 5
-body_y_start = 3
-body_y_end = 13
-wall_score_threshold = 0.38
-temperature = 0.18
-still_speed = 0.12
-goal_dist_threshold = 0.8
-maze_goal_dist_gate = 14.0
-maze_gate_obstacle_threshold = -0.80
-
-[rewards.wall_proximity]
-weight = -0.35
-[rewards.wall_proximity.params]
-obstacle_threshold = -0.55
-front_cols = 7
-body_y_start = 2
-body_y_end = 14
-wall_score_threshold = 0.18
-temperature = 0.18
-maze_goal_dist_gate = 14.0
-maze_gate_obstacle_threshold = -0.80
-
-[rewards.open_space]
-weight = 0.05
-[rewards.open_space.params]
-obstacle_threshold = -0.35
-front_cols = 8
-body_y_start = 1
-body_y_end = 15
-maze_goal_dist_gate = 14.0
-maze_gate_obstacle_threshold = -0.80
-
-[rewards.corridor_centering]
-weight = -0.18
-[rewards.corridor_centering.params]
-obstacle_threshold = -0.55
-front_cols = 8
-wall_score_threshold = 0.20
-temperature = 0.18
-center_band_half_width = 1
-maze_goal_dist_gate = 14.0
-maze_gate_obstacle_threshold = -0.80
-
-[rewards.directed_exploration]
-weight = 0.035
-[rewards.directed_exploration.params]
-radius = 0.55
-memory_size = 96
-goal_heading_std = 1.0
-
-[rewards.stuck_penalty]
-weight = -2.2
-[rewards.stuck_penalty.params]
-min_command = 0.05
-still_speed = 0.12
+[commands] # 说明：官方 command manager 的取样设置。
+resampling_time = [2.5, 4.0] # 说明：官方指令重取样间隔；这里每 2.5-4.0 秒换一次。
+
+[commands.limit] # 说明：官方速率指令限制。
+lin_vel_x = [0.0, 0.8] # 说明：x 向前速率指令上限；官方限制最大 0.8。
+lin_vel_y = [-0.3, 0.3] # 说明：y 侧向速率指令限制；维持官方区间。
+ang_vel_z = [-1.5, 1.5] # 说明：yaw 角速率指令限制；维持官方转向区间。
+
+[commands.ranges] # 说明：实际学习取样的指令区间。
+lin_vel_x = [0.8, 0.8] # 说明：固定发 0.8m/s 向前指令，让速率锚点平稳。
+lin_vel_y = [0.0, 0.0] # 说明：固定不发横移指令，尽量防止学螃蟹步。
+ang_vel_yaw = [0.0, 0.0] # 说明：固定不发原地转向指令，转向主要靠终点/墙回报学。
+
+[navigation] # 说明：规则导航开关。
+enabled = false # 说明：停用手写导航器；此处要求纯 RL 学 Track。
+
+[rl_navigation] # 说明：PPO workflow 里的阶段速率锚点设定。
+phase_command_enabled = true # 说明：启用阶段速率锚点，会覆写 obs/command 里的向前速率锚点。
+pre_maze_lin_vel_x = [0.8, 0.8] # 说明：进入迷宫段前的预设向前速率锚点。
+slope_lin_vel_x = [0.8, 0.8] # 说明：斜坡段阶段速率锚点；此处和官方上限一致。
+stairs_lin_vel_x = [0.66, 0.66] # 说明：台阶阶段速率锚点；这里用 0.66 做更保守的通过速度。
+maze_lin_vel_x = [0.8, 0.8] # 说明：迷宫段阶段速率锚点；此处仍要求维持向前压力。
+phase_maze_goal_dist_gate = 20.0 # 说明：用终点间距判定是否接近最后迷宫阶段；小于 20m 认为进入 maze 逻辑。
+phase_command_resample_steps = 240 # 说明：阶段指令维持 240 个 step 再重取样；越大速率越平稳。
+terrain_phase_speed_enabled = true # 说明：启用赛道地貌识别后可给坡/台阶/平地不同速率锚点。
+terrain_row_start = 3 # 说明：高程扫描网格中供识别赛道地貌的起始行。
+terrain_row_end = 13 # 说明：高程扫描网格中供识别赛道地貌的结束行。
+terrain_front_cols = 8 # 说明：只看前方 8 列高程扫描，判定接下来是坡还是台阶。
+terrain_step_quantile = 0.85 # 说明：用高程差的 85% 分位判定台阶/坡度强度，降低非正常点影响。
+terrain_lateral_std_threshold = 0.18 # 说明：侧向高程标准差阈值；太乱可能是墙/障碍，不当作坡台阶。
+terrain_wall_height_threshold = -1.05 # 说明：墙面/深坑过滤阈值；低于它更像墙或不可通行区域。
+terrain_slope_delta_threshold = 0.035 # 说明：斜坡段高程变化最小阈值。
+terrain_stair_delta_threshold = 0.10 # 说明：台阶高程变化最小阈值。
+terrain_stair_second_diff_threshold = 0.055 # 说明：台阶二阶高程差阈值；供识别一阶一阶的台阶。
+terrain_slope_sign_consistency_threshold = 0.55 # 说明：斜坡段高程变化朝向一致性阈值；越高越像连续坡。
+eval_command_override = true # 说明：测评时也显式采用平稳速率指令，尽量防止被赛题环境随机化指令干扰。
+eval_command = [0.8, 0.0, 0.0] # 说明：测评时给 policy 看到的指令：向前 0.8，不横移，不转向。
+
+# =============================================================================
+# Note: Locomotion preservation
+# 说明：这些回报维持基本运动能力，但多数辅助项已经降权，主信号让给评分拟合。
+# =============================================================================
+[rewards.track_lin_vel_xy] # 说明：线速率跟随回报：让实际 vx/vy 靠近指令速率。
+weight = 1.15 # 说明：系数中等；维持速率主线，但不压过体态/电量评分拟合。
+[rewards.track_lin_vel_xy.params] # 说明：线速率跟随参数。
+std = 0.22 # 说明：速率误差容忍度；越小越严格追踪 0.8。
+command_name = "base_velocity" # 说明：采用 Isaac Lab 的 base_velocity 指令。
+
+[rewards.command_speed_advantage] # 说明：向前速率优势回报：低于指令扣分，高于指令小幅回报。
+weight = 1.80 # 说明：系数较高；防止模型为了体态/省电变慢。
+[rewards.command_speed_advantage.params] # 说明：向前速率优势参数。
+command_name = "base_velocity" # 说明：采用 base_velocity 里的 x 速率指令。
+deadband = 0.00 # 说明：速率差没有死区；低一点就会被看见。
+surplus_scale = 0.35 # 说明：超过指令速率后的回报缩放；越小越容易给满回报。
+lag_scale = 0.75 # 说明：低于指令速率后的扣分缩放；越大扣分越温和。
+max_surplus = 1.00 # 说明：超速回报最多求取 1.0m/s 的优势，防止无限冲刺。
+max_lag = 0.80 # 说明：落后扣分最多求取 0.8m/s。
+lag_penalty_scale = 1.25 # 说明：低速扣分倍率；大于 1 表示低速比超速更不划算。
+min_command = 0.10 # 说明：指令速率超过 0.1 才启用此项。
+
+[rewards.track_ang_vel_z] # 说明：yaw 角速率跟随回报。
+weight = 0.05 # 说明：系数很低；此处不希望它强行按指令转，因为指令 yaw 固定为 0。
+[rewards.track_ang_vel_z.params] # 说明：yaw 速率跟随参数。
+std = 0.35 # 说明：yaw 误差容忍度。
+command_name = "base_velocity" # 说明：采用 base_velocity 的 yaw 指令。
+
+[rewards.lin_vel_z] # 说明：竖直速率扣分。
+weight = -0.35 # 说明：对身体扣分上下乱跳；已降权，尽量防止完全压制上楼/越障需要的 z 运动。
+
+[rewards.ang_vel_xy] # 说明：roll/pitch 角速率扣分。
+weight = -0.35 # 说明：扣分躯干横滚/俯仰抖动；已降权，尽量防止和 pose_score_formula 重复太重。
+
+[rewards.joint_acc] # 说明：关节加速度扣分。
+weight = -4.0e-7 # 说明：抑制关节快速抽动；系数很小，只做平滑辅助。
+
+[rewards.energy] # 说明：原始耗能扣分。
+weight = -7.0e-5 # 说明：直接扣分 torque*joint_vel；已降权，主耗能信号交给 energy_score_formula。
+
+[rewards.energy_score_formula] # 说明：官方耗能评分拟合回报。
+weight = 2.65 # 说明：提高系数；让模型更直接优化比赛 energy_score。
+
+[rewards.joint_torques] # 说明：关节力矩扣分。
+weight = -3.0e-5 # 说明：抑制暴力力矩；已降权，尽量防止把速率压没。
+
+[rewards.dof_pos_limits] # 说明：关节软限位扣分。
+weight = -0.16 # 说明：防止关节接近极限；辅助安全项，系数较低。
+
+[rewards.correct_base_height] # 说明：躯干高程扣分。
+weight = -0.25 # 说明：维持合理高程；已降权，尽量防止把狗压成保守慢走。
+[rewards.correct_base_height.params] # 说明：躯干高程参数。
+target_height = 0.38 # 说明：目标躯干高度 0.38m，接近 Go2 标准站姿。
+
+[rewards.action_rate] # 说明：动作一阶变化扣分。
+weight = -0.014 # 说明：防止 action 每步突变；轻量平滑。
+
+[rewards.action_smoothness] # 说明：动作二阶变化扣分。
+weight = -0.016 # 说明：防止动作高频抖动；轻量平滑。
+
+[rewards.undesired_contacts] # 说明：非期望身体触碰扣分。
+weight = -0.18 # 说明：大腿/身体等不该碰地时扣分；辅助安全项。
+[rewards.undesired_contacts.params] # 说明：非期望触碰参数。
+threshold = 1 # 说明：触碰力超过阈值才认为是真触碰。
+
+[rewards.termination] # 说明：非正常结束扣分。
+weight = -50.0 # 说明：摔倒/非正常 reset 扣分；维持较强，尽量防止开局死亡。
+
+[rewards.flat_orientation] # 说明：躯干水平体态扣分。
+weight = -0.55 # 说明：间接体态项；已降权，主体态信号交给 pose_score_formula。
+
+[rewards.pose_score_formula] # 说明：官方体态评分拟合回报。
+weight = 5 # 说明：此处体态主回报；越接近官方 pose_score 越应该主导学习。
+
+[rewards.posture_stability] # 说明：体态变化率扣分。
+weight = -0.55 # 说明：扣分 roll/pitch 快速变化；已降权，尽量防止压制必要动态动作。
+
+[rewards.hip_to_default] # 说明：四个髋关节回预设角扣分。
+weight = -0.45 # 说明：控制外八/内八；系数较低，只做轻量腿型约束。
+
+[rewards.front_hip_to_default] # 说明：前腿髋关节回预设角扣分。
+weight = -0.55 # 说明：前腿腿型约束稍强；防止前腿过度外八影响体态/耗能。
+
+[rewards.joint_position_penalty] # 说明：全关节偏离预设体态扣分。
+weight = -0.055 # 说明：轻量体态正则；尽量防止怪腿型，但不强行限制动作空间。
+[rewards.joint_position_penalty.params] # 说明：关节姿态扣分参数。
+stand_still_scale = 2.0 # 说明：接近静止时扣分翻倍，防止原地乱摆。
+cmd_threshold = 0.10 # 说明：线速率指令低于 0.1 时认为接近静止。
+ang_cmd_threshold = 0.20 # 说明：角速率指令低于 0.2 时认为接近静止。
+
+[rewards.stand_still_motion] # 说明：静止乱动扣分。
+weight = -0.25 # 说明：此处指令几乎一直向前，所以这项只是保险。
+[rewards.stand_still_motion.params] # 说明：静止乱动参数。
+command_name = "base_velocity" # 说明：采用 base_velocity 判定是否静止指令。
+lin_cmd_threshold = 0.15 # 说明：线速率指令小于此值才认为静止。
+ang_cmd_threshold = 0.20 # 说明：yaw 指令小于此值才认为静止。
+vertical_vel_scale = 0.5 # 说明：竖直速率在此扣分中的比例。
+ang_vel_scale = 0.5 # 说明：角速率在此扣分中的比例。
+joint_vel_scale = 0.1 # 说明：关节速度在此扣分中的比例。
+
+[rewards.commanded_still_penalty] # 说明：有速率指令却不动的扣分。
+weight = -0.18 # 说明：防止模型为了体态/省电站着不动；轻量保底。
+[rewards.commanded_still_penalty.params] # 说明：有指令不动扣分参数。
+command_name = "base_velocity" # 说明：采用 base_velocity 判定是否有速率指令。
+cmd_threshold = 0.08 # 说明：指令速率超过 0.08 才认为应该动。
+still_speed_threshold = 0.12 # 说明：实际速率低于 0.12 认为基本没动。
+
+[rewards.feet_air_time] # 说明：脚腾空时间回报。
+weight = 0.16 # 说明：鼓励迈步/跑步节奏；已降权，尽量防止只学跳。
+[rewards.feet_air_time.params] # 说明：脚腾空回报参数。
+command_name = "base_velocity" # 说明：有向前指令时才鼓励腾空。
+threshold = 0.18 # 说明：腾空超过 0.18s 后才开始有明显回报。
+
+[rewards.feet_slide] # 说明：脚滑扣分。
+weight = -0.10 # 说明：脚触碰地面还侧向滑动会扣分；轻量防打滑。
+
+[rewards.feet_stumble] # 说明：绊脚扣分。
+weight = -0.04 # 说明：脚撞台阶/墙会扣分；系数很低，尽量防止太保守。
+
+[rewards.dof_vel] # 说明：关节速度扣分。
+weight = -1.2e-4 # 说明：抑制关节速度过大；轻量保护电量和体态。
+
+[rewards.base_lateral_vel] # 说明：侧向速率误差扣分。
+weight = -0.16 # 说明：此处 vy 指令为 0，所以主要扣分侧滑/螃蟹步。
+
+[rewards.air_time_variance_penalty] # 说明：四只脚腾空时间方差扣分。
+weight = -0.25 # 说明：鼓励步态节奏对称；已降权，尽量防止过分限制跑跳。
+
+[rewards.feet_clearance] # 说明：摆动脚清障回报。
+weight = 0.08 # 说明：鼓励抬脚过坡/台阶；已降权，尽量防止抬太高浪费电。
+[rewards.feet_clearance.params] # 说明：摆动脚清障参数。
+command_name = "base_velocity" # 说明：有速率指令时才启用清障回报。
+target_height = 0.10 # 说明：基础终点抬脚高程 0.10m。
+std = 0.06 # 说明：抬脚高程误差容忍度。
+terrain_height_scale = 0.60 # 说明：前方赛道地貌越高，终点脚高按此比例增加。
+max_terrain_extra_height = 0.10 # 说明：赛道地貌带来的额外抬脚高程最多 0.10m。
+speed_height_scale = 0.01 # 说明：速率越快，终点脚高略微增加。
+body_y_start = 5 # 说明：高程扫描侧向区域起始。
+body_y_end = 11 # 说明：高程扫描侧向区域结束。
+near_x_start = 2 # 说明：高程扫描前向区域起始。
+near_x_end = 10 # 说明：高程扫描前向区域结束。
+delta_quantile = 0.85 # 说明：用高程变化的 85% 分位估计前方障碍高程。
+
+[rewards.feet_swing_forward] # 说明：摆动脚向前回报。
+weight = 0.025 # 说明：防止只抬脚不向前迈；系数很低。
+[rewards.feet_swing_forward.params] # 说明：摆动脚向前参数。
+command_name = "base_velocity" # 说明：有向前指令时才启用。
+target_forward = 0.11 # 说明：期望摆动脚相对躯干向前够 0.11m。
+std = 0.08 # 说明：脚前伸误差容忍度。
+min_command = 0.10 # 说明：指令速率超过 0.1 才启用。
+
+[rewards.score_guidance] # 说明：综合评分引导回报。
+weight = 0.55 # 说明：把速率跟随、体态、电量组合起来；提高评分朝向一致性。
+[rewards.score_guidance.params] # 说明：综合评分引导参数。
+command_name = "base_velocity" # 说明：采用 base_velocity 判定速率跟随。
+min_command = 0.15 # 说明：指令速率大于 0.15 才启用，尽量防止原地骗分。
+tracking_std = 0.35 # 说明：速率跟随误差容忍度。
+posture_std = 0.25 # 说明：体态误差容忍度。
+power_scale = 45.0 # 说明：耗能指数衰减尺度；越小越重视省电。
+posture_weight = 0.55 # 说明：综合引导中体态比例；此处更偏向体态评分。
+
+# =============================================================================
+# Note: Pure RL navigation objective
+# 说明：这些回报负责 Track 终点推进、完成、避墙、尽量防止卡住。
+# =============================================================================
+[rewards.forward_heading_velocity] # 说明：朝自身前方移动回报。
+weight = 0.42 # 说明：轻量鼓励头朝前走；已降权，尽量防止低速向前回报压住主速率。
+[rewards.forward_heading_velocity.params] # 说明：朝前移动参数。
+target_speed = 0.58 # 说明：达到 0.58m/s 左右即可获得较多此项回报。
+max_reward = 1.0 # 说明：此项单步回报上限。
+
+[rewards.backward_penalty] # 说明：后退扣分。
+weight = -1.5 # 说明：防止朝终点反朝向倒退。
+[rewards.backward_penalty.params] # 说明：后退扣分参数。
+deadband = 0.03 # 说明：小于 0.03m/s 的轻微后退不计入。
+
+[rewards.goal_heading_alignment] # 说明：朝向终点回报。
+weight = 0.7 # 说明：鼓励躯干朝终点朝向；系数中低，尽量防止原地转头。
+[rewards.goal_heading_alignment.params] # 说明：朝向终点参数。
+std = 0.75 # 说明：终点朝向误差容忍度；越小越要求正对终点。
+
+[rewards.goal_velocity_projection] # 说明：朝终点朝向的速率投影回报。
+weight = 2.20 # 说明：重要导航速率回报；鼓励实际速率朝终点朝向。
+[rewards.goal_velocity_projection.params] # 说明：终点速率投影参数。
+max_speed = 0.80 # 说明：投影速率按 0.8m/s 封顶，和官方速率锚点一致。
+
+[rewards.goal_backtrack_penalty] # 说明：远离终点扣分。
+weight = -2.0 # 说明：间距终点越来越远会扣分。
+[rewards.goal_backtrack_penalty.params] # 说明：远离终点扣分参数。
+deadband = 0.02 # 说明：间距变化小于 0.02m 不算明显后退。
+
+[rewards.approach_goal] # 说明：接近终点 dense 回报。
+weight = 13.0 # 说明：每步间距终点更近都会给回报；导航主信号之一。
+
+[rewards.goal_distance] # 说明：终点间距回报。
+weight = 0.55 # 说明：离终点越近越好；辅助 dense 信号。
+[rewards.goal_distance.params] # 说明：终点间距回报参数。
+scale = 8.0 # 说明：间距回报衰减尺度；越大越平缓。
+
+[rewards.reach_goal] # 说明：到达终点稀疏回报。
+weight = 38.0 # 说明：进入终点半径时给一次较大稀疏回报。
+[rewards.reach_goal.params] # 说明：到达终点参数。
+threshold = 0.6 # 说明：间距终点 0.6m 内算到达。
+
+[rewards.task_complete] # 说明：完成任务回报。
+weight = 190.0 # 说明：完成 Track 的大回报；防止只刷中间 dense 回报不冲终点。
+[rewards.task_complete.params] # 说明：完成任务参数。
+threshold = 0.6 # 说明：与 reach_goal 一致，0.6m 内判定完成。
+
+[rewards.navigation_time] # 说明：时间扣分。
+weight = -0.007 # 说明：每一步扣一点，鼓励更快完成；此处较温和，尽量防止破坏体态/电量。
+
+[rewards.maze_context_gate] # 说明：maze 段上下文门控回报。
+weight = 0.0 # 说明：此处停用，只维持参数给其他 maze 回报复用。
+[rewards.maze_context_gate.params] # 说明：maze 段门控参数。
+goal_dist_gate = 20.0 # 说明：终点间距小于 20m 才认为进入maze 段相关区域。
+obstacle_threshold = -0.70 # 说明：高程扫描低于此阈值时更像墙/障碍。
+temperature = 0.18 # 说明：门控软化温度；越小越接近硬判定。
+front_cols = 12 # 说明：观察前方 12 列高程扫描。
+
+[rewards.wall_collision] # 说明：撞墙扣分。
+weight = -8.0 # 说明：撞墙/贴墙冲击扣分；仍然较强，防止maze 段硬撞。
+[rewards.wall_collision.params] # 说明：撞墙扣分参数。
+obstacle_threshold = -0.70 # 说明：墙面高程阈值。
+front_cols = 4 # 说明：只看最前方 4 列判定即将撞墙。
+body_y_start = 3 # 说明：侧向检测区域起始。
+body_y_end = 13 # 说明：侧向检测区域结束。
+wall_score_threshold = 0.45 # 说明：墙面分数超过 0.45 才认为危险明显。
+temperature = 0.18 # 说明：墙面判定软化温度。
+touch_penalty = 0.12 # 说明：轻微触碰扣分比例。
+slow_speed = 0.15 # 说明：低于此速率认为是慢速贴墙。
+impact_speed = 0.55 # 说明：高于此速率撞墙视为冲击。
+impact_penalty = 1.60 # 说明：高速撞墙额外扣分倍率。
+maze_goal_dist_gate = 20.0 # 说明：只在接近maze 段/终点区域启用墙相关逻辑。
+maze_gate_obstacle_threshold = -0.70 # 说明：maze 段门控采用的障碍阈值。
+
+[rewards.wall_stall_penalty] # 说明：贴墙卡住扣分。
+weight = -1.0 # 说明：面前有墙且速率很慢时扣分，防止卡角落。
+[rewards.wall_stall_penalty.params] # 说明：卡墙扣分参数。
+obstacle_threshold = -0.70 # 说明：墙面高程阈值。
+front_cols = 7 # 说明：看前方 7 列判定是否被墙挡住。
+body_y_start = 3 # 说明：侧向检测区域起始。
+body_y_end = 13 # 说明：侧向检测区域结束。
+wall_score_threshold = 0.25 # 说明：墙面分数超过 0.25 认为前方受阻。
+temperature = 0.18 # 说明：墙面判定软化温度。
+still_speed = 0.12 # 说明：实际速率低于 0.12 认为卡住。
+goal_dist_threshold = 0.8 # 说明：离终点 0.8m 内不强扣，尽量防止终点附近误伤。
+maze_goal_dist_gate = 20.0 # 说明：只在maze 段/终点附近启用。
+maze_gate_obstacle_threshold = -0.70 # 说明：maze 段门控障碍阈值。
+
+[rewards.wall_proximity] # 说明：靠墙过近扣分。
+weight = -0.28 # 说明：太贴墙会扣分；系数较低，允许必要贴边通过。
+[rewards.wall_proximity.params] # 说明：靠墙扣分参数。
+obstacle_threshold = -0.55 # 说明：更宽松的墙面阈值，供提前感知靠墙。
+front_cols = 10 # 说明：看前方 10 列，区间比 wall_collision 更远。
+body_y_start = 2 # 说明：侧向检测区域起始。
+body_y_end = 14 # 说明：侧向检测区域结束。
+wall_score_threshold = 0.12 # 说明：墙面分数超过 0.12 就开始轻扣。
+temperature = 0.18 # 说明：墙面判定软化温度。
+maze_goal_dist_gate = 20.0 # 说明：只在maze 段/终点附近启用。
+maze_gate_obstacle_threshold = -0.70 # 说明：maze 段门控障碍阈值。
+
+[rewards.open_space] # 说明：前方开阔回报。
+weight = 0.04 # 说明：前方更空旷时小回报；系数很低，只做导航偏好。
+[rewards.open_space.params] # 说明：开阔空间参数。
+obstacle_threshold = -0.35 # 说明：比墙面阈值更保守，供判定通道开阔程度。
+front_cols = 10 # 说明：看前方 10 列。
+body_y_start = 1 # 说明：侧向检测区域起始。
+body_y_end = 15 # 说明：侧向检测区域结束。
+maze_goal_dist_gate = 20.0 # 说明：只在maze 段/终点附近启用。
+maze_gate_obstacle_threshold = -0.70 # 说明：maze 段门控障碍阈值。
+
+[rewards.corridor_centering] # 说明：走廊居中扣分。
+weight = -0.14 # 说明：偏离通道中心会轻扣；尽量防止贴墙，但不显式死走中线。
+[rewards.corridor_centering.params] # 说明：走廊居中参数。
+obstacle_threshold = -0.55 # 说明：判定墙/障碍的高程阈值。
+front_cols = 10 # 说明：看前方 10 列。
+wall_score_threshold = 0.12 # 说明：墙面分数阈值。
+temperature = 0.18 # 说明：墙面判定软化温度。
+center_band_half_width = 1 # 说明：中心安全带半宽；越大越宽松。
+maze_goal_dist_gate = 20.0 # 说明：只在maze 段/终点附近启用。
+maze_gate_obstacle_threshold = -0.70 # 说明：maze 段门控障碍阈值。
+
+[rewards.directed_exploration] # 说明：有朝向的探索回报。
+weight = 0.015 # 说明：鼓励探索新位置；系数极低，尽量防止绕路刷探索。
+[rewards.directed_exploration.params] # 说明：探索参数。
+radius = 0.55 # 说明：位置间隔超过 0.55m 才算新的探索点。
+memory_size = 96 # 说明：记忆最近 96 个探索点，尽量防止重复刷。
+goal_heading_std = 1.0 # 说明：探索朝向和终点朝向的容忍度。
+
+[rewards.stuck_penalty] # 说明：卡住扣分。
+weight = -1.4 # 说明：有向前指令但实际速率很低时扣分。
+[rewards.stuck_penalty.params] # 说明：卡住扣分参数。
+min_command = 0.05 # 说明：指令速率超过 0.05 才认为应该动。
+still_speed = 0.13 # 说明：实际速率低于 0.13 认为卡住或不动。
